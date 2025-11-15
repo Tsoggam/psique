@@ -1,0 +1,207 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Psique - Universidade Corporativa</title>
+    <link rel="icon" type="image/png" href="assets/images/leaves.png">
+    <link rel="stylesheet" href="style.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.6.0/css/all.min.css">
+</head>
+
+<body>
+    <div id="login-screen" class="screen active">
+        <div class="login-background"></div>
+        <div class="container">
+            <div class="card">
+                <div class="logo-container">
+                    <div class="logo-circle">
+                        <img class="img-logo" src="assets/images/Logo_Minimalista_PSIQUE.png" alt="PSIQUE">
+                    </div>
+                    <h1>Universidade Corporativa PSIQUE</h1>
+                    <p class="subtitle">Sejam bem-vindos(as)! 🌿</p>
+                </div>
+
+                <form id="login-form">
+                    <div class="input-group">
+                        <label for="email">Email</label>
+                        <input type="email" id="email" placeholder="seu@email.com" required>
+                    </div>
+
+                    <div class="input-group">
+                        <label for="password">Senha</label>
+                        <input type="password" id="password" placeholder="••••••••" required>
+                    </div>
+
+                    <button type="submit" class="btn btn-primary">
+                        <span>Entrar no Portal</span>
+                        <span>→</span>
+                    </button>
+
+                    <div id="login-error" class="error-message"></div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <div id="member-screen" class="screen">
+        <div class="member-background"></div>
+
+        <nav class="top-nav">
+            <div class="nav-content">
+                <div class="nav-logo">
+                    <div class="logo-circle-small">
+                        <img class="img-members" src="assets/images/Logo_Minimalista_PSIQUE.png" alt="PSIQUE">
+                    </div>
+                    <span>PSIQUE</span>
+                </div>
+                <div class="user-info">
+                    <span id="user-badge" class="user-badge"></span>
+                    <button id="logout-btn" class="btn btn-logout">
+                        <span><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                    </button>
+                </div>
+            </div>
+        </nav>
+
+        <button id="theme-toggle" class="theme-toggle" title="Alternar tema">
+            <svg class="sun-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <circle cx="12" cy="12" r="5"></circle>
+                <line x1="12" y1="1" x2="12" y2="3"></line>
+                <line x1="12" y1="21" x2="12" y2="23"></line>
+                <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+                <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+                <line x1="1" y1="12" x2="3" y2="12"></line>
+                <line x1="21" y1="12" x2="23" y2="12"></line>
+                <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+                <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+            </svg>
+            <svg class="moon-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                stroke-width="2">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+            </svg>
+        </button>
+
+        <div class="container">
+            <div class="welcome-section">
+                <h1>Universidade Corporativa Psique</h1>
+                <p id="welcome-message">Bem-vindo(a) 😊</p>
+            </div>
+
+            <div class="tabs-container">
+                <div class="tabs">
+                    <button class="tab active" data-tab="videos">Aulas</button>
+                    <button class="tab" data-tab="files">Materiais</button>
+                </div>
+                <div class="view-toggle">
+                    <button class="view-btn active" data-view="grid" title="Grade">
+                        <i class="fa-solid fa-table-cells"></i>
+                    </button>
+                    <button class="view-btn" data-view="list" title="Lista">
+                        <i class="fa-solid fa-list"></i>
+                    </button>
+                </div>
+            </div>
+
+            <div id="videos-tab" class="tab-content active">
+                <div id="videos-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Carregando conteúdos...</p>
+                </div>
+                <div id="videos-container" class="content-grid"></div>
+                <div id="no-videos" class="empty-state" style="display: none;">
+                    <p>Em breve novos conteúdos serão liberados.</p>
+                </div>
+            </div>
+
+            <div id="files-tab" class="tab-content">
+                <div id="files-loading" class="loading">
+                    <div class="spinner"></div>
+                    <p>Carregando materiais...</p>
+                </div>
+                <div id="files-container" class="content-grid"></div>
+                <div id="no-files" class="empty-state" style="display: none;">
+                    <p>Em breve novos materiais serão liberados.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="video-modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="modal-content">
+            <button class="close-modal" id="close-modal-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+
+            <div class="modal-layout">
+                <div class="modal-main">
+                    <div class="video-player-wrapper">
+                        <div class="video-player" id="video-player"></div>
+                    </div>
+                    <div class="video-info-section">
+                        <div class="video-header">
+                            <div>
+                                <h2 id="video-title">Título</h2>
+                            </div>
+                            <div class="video-watched-indicator" id="video-watched-indicator">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none">
+                                    <circle cx="12" cy="12" r="10" fill="#4caf50" />
+                                    <path d="M8 12l3 3 5-5" stroke="white" stroke-width="2" stroke-linecap="round" />
+                                </svg>
+                                <span>Concluído</span>
+                            </div>
+                        </div>
+                        <p id="video-description">Descrição</p>
+
+                        <div id="video-files-container" class="video-files-section"></div>
+
+                        <div class="video-actions">
+                            <button class="btn btn-complete" id="mark-complete-btn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
+                                    <polyline points="22 4 12 14.01 9 11.01"></polyline>
+                                </svg>
+                                <span>Marcar como concluído</span>
+                            </button>
+                            <button class="btn btn-next-video" id="next-video-btn" style="display: none;">
+                                <span>Próxima aula</span>
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <polyline points="9 18 15 12 9 6"></polyline>
+                                </svg>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="modal-sidebar">
+                    <div class="playlist-header">
+                        <h3>Conteúdos</h3>
+                        <div class="playlist-progress">
+                            <span id="playlist-progress-text">0 de 0</span>
+                        </div>
+                    </div>
+                    <div class="playlist-items" id="playlist-items"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <script>
+        const SUPABASE_URL = 'https://arwzvqicgogyfxloolxt.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImFyd3p2cWljZ29neWZ4bG9vbHh0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMwNDExNzksImV4cCI6MjA3ODYxNzE3OX0.hn6nj5p3kOUoYZnSKt2U4PyQ6vkVtm4C2PJfAkhS9g8';
+    </script>
+
+    <script src="app.js"></script>
+</body>
+
+</html>
