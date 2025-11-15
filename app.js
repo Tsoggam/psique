@@ -9,7 +9,6 @@ const themeToggle = document.getElementById('theme-toggle');
 const savedTheme = localStorage.getItem('theme') || 'light';
 document.documentElement.setAttribute('data-theme', savedTheme);
 
-// Restaurar modo de visualização
 const savedView = localStorage.getItem('viewMode') || 'grid';
 if (savedView === 'list') {
     document.querySelector('[data-view="list"]')?.classList.add('active');
@@ -44,7 +43,6 @@ document.querySelectorAll('.tab').forEach(tab => {
     });
 });
 
-// View Toggle
 document.querySelectorAll('.view-btn').forEach(btn => {
     btn.addEventListener('click', (e) => {
         const view = e.currentTarget.dataset.view;
@@ -141,13 +139,13 @@ async function showMemberScreen() {
         const badge = document.getElementById('user-badge');
 
         if (currentUserLevel === 1) {
-            badge.innerHTML = '<i class="fa-solid fa-p"></i>';
+            badge.innerHTML = 'Psicólogos';
         }
         else if (currentUserLevel === 2) {
-            badge.innerHTML = '<i class="fa-solid fa-a"></i>';
+            badge.innerHTML = 'Administrativo';
         }
         else {
-            badge.innerHTML = '<i class="fa-solid fa-user"></i>';
+            badge.innerHTML = '<i class="fa-solid fa-exclamation"></i>';
         }
 
         document.getElementById('login-screen').classList.remove('active');
