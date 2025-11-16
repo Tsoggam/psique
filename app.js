@@ -161,6 +161,86 @@ async function showMemberScreen() {
     }
 }
 
+
+async function loadVideoFiles(videoId) {
+    const container = document.getElementById('video-files-container');
+
+    try {
+        const { data: videoFiles, error } = await supabase
+            .from('video_files')
+            .select(`
+                file_id,
+                display_order,
+                files (
+                    id,
+                    name,
+                    description,
+                    file_url
+                )
+            `)
+            .eq('video_id', videoId)
+            .order('display_order', { ascending: true });
+
+        if (error) throw error;
+
+        container.innerHTML = '';
+
+        if (!videoFiles || videoFiles.length === 0) {
+            container.style.display = 'none';
+            return;
+        }
+
+        container.style.display = 'block';
+
+        const header = document.createElement('div');
+        header.className = 'video-files-header';
+        header.innerHTML = `
+            <h3>
+        <i class="fa-solid fa-file-arrow-down"></i>
+            </h3>
+            <span class="files-count">${videoFiles.length} ${videoFiles.length === 1 ? 'arquivo' : 'arquivos'}</span>
+        `;
+        container.appendChild(header);
+
+        const filesList = document.createElement('div');
+        filesList.className = 'video-files-list';
+
+        videoFiles.forEach(vf => {
+            const file = vf.files;
+            if (!file) return;
+
+            const fileCard = document.createElement('div');
+            fileCard.className = 'video-file-item';
+
+            const icon = getFileIcon(file.name);
+
+            fileCard.innerHTML = `
+                <div class="video-file-icon">${icon}</div>
+                <div class="video-file-info">
+                    <h4>${file.name}</h4>
+                    ${file.description ? `<p>${file.description}</p>` : ''}
+                </div>
+                <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn-download" title="Baixar arquivo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Baixar</span>
+                </button>
+            `;
+
+            filesList.appendChild(fileCard);
+        });
+
+        container.appendChild(filesList);
+
+    } catch (error) {
+        console.error('Erro ao carregar arquivos do vídeo:', error);
+        container.style.display = 'none';
+    }
+}
+
 async function loadVideos() {
     const loading = document.getElementById('videos-loading');
     const container = document.getElementById('videos-container');
@@ -404,7 +484,6 @@ async function openVideoModal(video, index) {
     const modal = document.getElementById('video-modal');
     const player = document.getElementById('video-player');
 
-
     const { data: progressData } = await supabase
         .from('video_progress')
         .select('completed')
@@ -451,6 +530,8 @@ async function openVideoModal(video, index) {
     }
 
     renderVideoPlayer(player, video);
+
+    await loadVideoFiles(video.id);
 
     createPlaylist();
 
@@ -619,12 +700,22 @@ function downloadFile(url, filename) {
 function getFileIcon(filename) {
     const ext = filename.split('.').pop().toLowerCase();
     const icons = {
-        pdf: '📄', doc: '📝', docx: '📝',
-        xls: '📊', xlsx: '📊',
-        ppt: '📊', pptx: '📊',
-        zip: '🗜️', rar: '🗜️',
-        mp4: '🎥', mp3: '🎵',
-        jpg: '🖼️', jpeg: '🖼️', png: '🖼️', gif: '🖼️'
+        pdf: '<i class="fa-solid fa-file-pdf"></i>',
+        doc: '<i class="fa-solid fa-file"></i>',
+        docx: '<i class="fa-regular fa-file-word"></i>',
+        xls: '<i class="fa-solid fa-file-excel"></i>',
+        xlsx: '<i class="fa-solid fa-file-excel"></i>',
+        ppt: '<i class="fa-solid fa-file-powerpoint"></i>',
+        pptx: '<i class="fa-solid fa-file-powerpoint"></i>',
+        zip: '<i class="fa-solid fa-file-zipper"></i>',
+        rar: '<i class="fa-solid fa-file-zipper"></i>',
+        mp4: '<i class="fa-solid fa-file-video"></i>',
+        mkv: '<i class="fa-solid fa-file-video"></i>',
+        mp3: '<i class="fa-solid fa-file-audio"></i>',
+        jpg: '<i class="fa-solid fa-file-image"></i>',
+        jpeg: '<i class="fa-solid fa-file-image"></i>',
+        png: '<i class="fa-solid fa-file-image"></i>',
+        gif: '<i class="fa-solid fa-file-image"></i>'
     };
     return icons[ext] || '<i class="fa-regular fa-hard-drive"></i>';
 }
