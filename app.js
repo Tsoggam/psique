@@ -1055,7 +1055,7 @@ function subscribeToChatMessages() {
                         .from('user_access')
                         .select('access_level_id')
                         .eq('user_id', payload.new.user_id)
-                        .single();
+                        .maybeSingle();
 
                     if (accessError) {
                         console.error('Erro ao buscar access level:', accessError);
