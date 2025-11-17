@@ -897,7 +897,14 @@ async function loadChatMessages() {
 
             const { data: usersData } = await supabase
                 .from('users')
-                .select('id, name, full_name')
+                .select(`
+                    id, 
+                    name, 
+                    full_name,
+                    user_access (
+                        access_level_id
+                    )
+                `)
                 .in('id', userIds);
 
             const usersMap = {};
@@ -955,10 +962,22 @@ function createMessageElement(msg) {
     messageDiv.className = `chat-message ${isOwn ? 'own' : ''}`;
 
     let userName = 'Usuário';
+    let userPrefix = '';
+
     if (msg.users) {
-        userName = msg.users.full_name || msg.users.name || 'Usuário';
-        userName = userName.split(' ')[0];
-        userName = userName.charAt(0).toUpperCase() + userName.slice(1).toLowerCase();
+        const fullName = msg.users.full_name || msg.users.name || 'Usuário';
+
+        if (msg.users.user_access && msg.users.user_access.length > 0) {
+            const accessLevelId = msg.users.user_access[0].access_level_id;
+
+            if (accessLevelId === 1) {
+                userPrefix = 'Psi | ';
+            } else if (accessLevelId === 2) {
+                userPrefix = 'Adm | ';
+            }
+        }
+
+        userName = userPrefix + fullName;
     }
 
     const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', {
@@ -1021,7 +1040,14 @@ function subscribeToChatMessages() {
                 try {
                     const { data: userData } = await supabase
                         .from('users')
-                        .select('id, name, full_name')
+                        .select(`
+                            id, 
+                            name, 
+                            full_name,
+                            user_access (
+                                access_level_id
+                            )
+                        `)
                         .eq('id', payload.new.user_id)
                         .single();
 
