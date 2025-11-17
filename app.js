@@ -1053,6 +1053,16 @@ function subscribeToChatMessages() {
                         console.error('Erro ao buscar usuário:', userError);
                     }
 
+                    const { data: accessData, error: accessError } = await supabase
+                        .from('user_access')
+                        .select('access_level_id')
+                        .eq('user_id', payload.new.user_id)
+                        .maybeSingle();
+
+                    if (accessError) {
+                        console.error('Erro ao buscar access level:', accessError);
+                    }
+
                     const newMessage = {
                         id: payload.new.id,
                         message: payload.new.message,
