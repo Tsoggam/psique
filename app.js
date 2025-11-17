@@ -4,6 +4,9 @@ let currentUser = null;
 let allVideos = [];
 let currentVideoIndex = -1;
 let completedVideoIds = [];
+let chatOpen = false;
+let chatSubscription = null;
+let chatMessages = [];
 
 const themeToggle = document.getElementById('theme-toggle');
 const savedTheme = localStorage.getItem('theme') || 'light';
@@ -35,7 +38,6 @@ document.getElementById('close-modal-btn').addEventListener('click', closeVideoM
 document.getElementById('mark-complete-btn').addEventListener('click', markVideoComplete);
 document.getElementById('next-video-btn').addEventListener('click', playNextVideo);
 
-// Tabs
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
         const tabName = e.target.dataset.tab;
@@ -786,6 +788,332 @@ function showToast(message) {
         }, 300);
     }, 4000);
 }
+
+function createChatElements() {
+    const chatButton = document.createElement('button');
+    chatButton.id = 'chat-toggle-btn';
+    chatButton.className = 'chat-toggle-btn';
+    chatButton.innerHTML = `
+        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+        </svg>
+        <span class="chat-badge" id="chat-badge" style="display: none;">0</span>
+    `;
+
+    const chatModal = document.createElement('div');
+    chatModal.id = 'chat-modal';
+    chatModal.className = 'chat-modal';
+    chatModal.innerHTML = `
+        <div class="chat-header">
+            <div class="chat-header-info">
+                <h3>Chat ao Vivo</h3>
+                <span class="chat-status">
+                    <span class="status-dot"></span>
+                    <span id="online-count">Carregando...</span>
+                </span>
+            </div>
+            <button class="chat-close-btn" id="chat-close-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+        </div>
+        
+        <div class="chat-messages" id="chat-messages">
+            <div class="chat-loading">
+                <div class="spinner"></div>
+                <p>Carregando mensagens...</p>
+            </div>
+        </div>
+        
+        <div class="chat-input-container">
+            <input 
+                type="text" 
+                id="chat-input" 
+                placeholder="Digite sua mensagem..." 
+                maxlength="500"
+            />
+            <button id="chat-send-btn" class="chat-send-btn">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="22" y1="2" x2="11" y2="13"></line>
+                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+                </svg>
+            </button>
+        </div>
+    `;
+
+    document.body.appendChild(chatButton);
+    document.body.appendChild(chatModal);
+
+    chatButton.addEventListener('click', toggleChat);
+    document.getElementById('chat-close-btn').addEventListener('click', toggleChat);
+    document.getElementById('chat-send-btn').addEventListener('click', sendMessage);
+    document.getElementById('chat-input').addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
+    });
+}
+
+function toggleChat() {
+    chatOpen = !chatOpen;
+    const modal = document.getElementById('chat-modal');
+    const button = document.getElementById('chat-toggle-btn');
+
+    if (chatOpen) {
+        modal.classList.add('active');
+        button.classList.add('active');
+        loadChatMessages();
+        subscribeToChatMessages();
+        document.getElementById('chat-input').focus();
+
+        const badge = document.getElementById('chat-badge');
+        badge.style.display = 'none';
+        badge.textContent = '0';
+    } else {
+        modal.classList.remove('active');
+        button.classList.remove('active');
+        if (chatSubscription) {
+            supabase.removeChannel(chatSubscription);
+            chatSubscription = null;
+        }
+    }
+}
+
+async function loadChatMessages() {
+    const messagesContainer = document.getElementById('chat-messages');
+    messagesContainer.innerHTML = '<div class="chat-loading"><div class="spinner"></div><p>Carregando...</p></div>';
+
+    try {
+        const { data: messages, error } = await supabase
+            .from('chat_messages')
+            .select('id, message, created_at, user_id')
+            .order('created_at', { ascending: true })
+            .limit(100);
+
+        if (error) throw error;
+
+        if (messages && messages.length > 0) {
+            const userIds = [...new Set(messages.map(m => m.user_id))];
+
+            const { data: usersData } = await supabase
+                .from('users')
+                .select('id, name, full_name')
+                .in('id', userIds);
+
+            const usersMap = {};
+            if (usersData) {
+                usersData.forEach(user => {
+                    usersMap[user.id] = user;
+                });
+            }
+
+            chatMessages = messages.map(msg => ({
+                ...msg,
+                users: usersMap[msg.user_id] || null
+            }));
+        } else {
+            chatMessages = [];
+        }
+
+        renderChatMessages();
+        updateOnlineCount();
+
+    } catch (error) {
+        console.error('Erro ao carregar mensagens:', error);
+        messagesContainer.innerHTML = '<div class="chat-error">Erro ao carregar mensagens</div>';
+    }
+}
+
+function renderChatMessages() {
+    const messagesContainer = document.getElementById('chat-messages');
+    messagesContainer.innerHTML = '';
+
+    if (chatMessages.length === 0) {
+        messagesContainer.innerHTML = `
+            <div class="chat-empty">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
+                </svg>
+                <p>Nenhuma mensagem ainda</p>
+                <small>Seja o primeiro a enviar uma mensagem!</small>
+            </div>
+        `;
+        return;
+    }
+
+    chatMessages.forEach(msg => {
+        const messageEl = createMessageElement(msg);
+        messagesContainer.appendChild(messageEl);
+    });
+
+    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+}
+
+function createMessageElement(msg) {
+    const messageDiv = document.createElement('div');
+    const isOwn = msg.user_id === currentUser?.id;
+    messageDiv.className = `chat-message ${isOwn ? 'own' : ''}`;
+
+    let userName = 'Usuário';
+    if (msg.users) {
+        userName = msg.users.full_name || msg.users.name || 'Usuário';
+        userName = userName.split(' ')[0];
+        userName = userName.charAt(0).toUpperCase() + userName.slice(1).toLowerCase();
+    }
+
+    const time = new Date(msg.created_at).toLocaleTimeString('pt-BR', {
+        hour: '2-digit',
+        minute: '2-digit'
+    });
+
+    messageDiv.innerHTML = `
+        <div class="message-content">
+            ${!isOwn ? `<div class="message-author">${userName}</div>` : ''}
+            <div class="message-text">${escapeHtml(msg.message)}</div>
+            <div class="message-time">${time}</div>
+        </div>
+    `;
+
+    return messageDiv;
+}
+
+async function sendMessage() {
+    const input = document.getElementById('chat-input');
+    const message = input.value.trim();
+
+    if (!message || !currentUser) return;
+
+    const sendBtn = document.getElementById('chat-send-btn');
+    sendBtn.disabled = true;
+
+    try {
+        const { error } = await supabase
+            .from('chat_messages')
+            .insert({
+                user_id: currentUser.id,
+                message: message
+            });
+
+        if (error) throw error;
+
+        input.value = '';
+
+    } catch (error) {
+        console.error('Erro ao enviar mensagem:', error);
+        showToast('❌ Erro ao enviar mensagem');
+    } finally {
+        sendBtn.disabled = false;
+        input.focus();
+    }
+}
+
+function subscribeToChatMessages() {
+    chatSubscription = supabase
+        .channel('chat_messages_channel')
+        .on(
+            'postgres_changes',
+            {
+                event: 'INSERT',
+                schema: 'public',
+                table: 'chat_messages'
+            },
+            async (payload) => {
+                try {
+                    const { data: userData } = await supabase
+                        .from('users')
+                        .select('id, name, full_name')
+                        .eq('id', payload.new.user_id)
+                        .single();
+
+                    const newMessage = {
+                        id: payload.new.id,
+                        message: payload.new.message,
+                        created_at: payload.new.created_at,
+                        user_id: payload.new.user_id,
+                        users: userData || null
+                    };
+
+                    chatMessages.push(newMessage);
+
+                    const messagesContainer = document.getElementById('chat-messages');
+
+                    const emptyState = messagesContainer.querySelector('.chat-empty');
+                    if (emptyState) {
+                        messagesContainer.innerHTML = '';
+                    }
+
+                    const messageEl = createMessageElement(newMessage);
+                    messagesContainer.appendChild(messageEl);
+                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                    if (!chatOpen && newMessage.user_id !== currentUser?.id) {
+                        const badge = document.getElementById('chat-badge');
+                        const currentCount = parseInt(badge.textContent) || 0;
+                        badge.textContent = currentCount + 1;
+                        badge.style.display = 'flex';
+                    }
+                } catch (error) {
+                    console.error('Erro ao processar nova mensagem:', error);
+                }
+            }
+        )
+        .subscribe();
+}
+
+async function updateOnlineCount() {
+    try {
+        const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+        const { data, error } = await supabase
+            .from('chat_messages')
+            .select('user_id')
+            .gte('created_at', fiveMinutesAgo);
+
+        if (!error && data) {
+            const uniqueUsers = new Set(data.map(m => m.user_id));
+            const count = uniqueUsers.size;
+            document.getElementById('online-count').textContent =
+                count === 1 ? '1 usuário ativo' : `${count} usuários ativos`;
+        } else {
+            document.getElementById('online-count').textContent = 'Chat ao vivo';
+        }
+    } catch (error) {
+        document.getElementById('online-count').textContent = 'Chat ao vivo';
+    }
+}
+
+function escapeHtml(text) {
+    const div = document.createElement('div');
+    div.textContent = text;
+    return div.innerHTML;
+}
+
+const originalShowMemberScreen = showMemberScreen;
+showMemberScreen = async function () {
+    await originalShowMemberScreen.call(this);
+
+    if (!document.getElementById('chat-toggle-btn')) {
+        createChatElements();
+    }
+};
+
+const originalHandleLogout = handleLogout;
+handleLogout = async function () {
+    if (chatSubscription) {
+        supabase.removeChannel(chatSubscription);
+        chatSubscription = null;
+    }
+
+    const chatBtn = document.getElementById('chat-toggle-btn');
+    const chatModal = document.getElementById('chat-modal');
+    if (chatBtn) chatBtn.remove();
+    if (chatModal) chatModal.remove();
+
+    chatOpen = false;
+    chatMessages = [];
+
+    await originalHandleLogout.call(this);
+};
 
 const style = document.createElement('style');
 style.textContent = `
