@@ -1114,7 +1114,7 @@ async function updateOnlineCount() {
             const uniqueUsers = new Set(data.map(m => m.user_id));
             const count = uniqueUsers.size;
             document.getElementById('online-count').textContent =
-                count === 1 ? '1' : `${count}`;
+                count === 1 ? '1 usuário ativo' : `${count} usuários ativos`;
         } else {
             document.getElementById('online-count').textContent = 'CHAT PSIQUE 🌿';
         }
