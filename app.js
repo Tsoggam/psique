@@ -969,17 +969,15 @@ function createMessageElement(msg) {
     messageDiv.className = `chat-message ${isOwn ? 'own' : ''}`;
 
     let userName = 'Usuário';
-    let userPrefix = '';
 
     if (msg.users) {
         const fullName = msg.users.full_name || msg.users.name || 'Usuário';
 
-        if (msg.users.access_level_id) {
-            if (msg.users.access_level_id === 1) {
-                userPrefix = 'Psi | ';
-            } else if (msg.users.access_level_id === 2) {
-                userPrefix = 'Adm | ';
-            }
+        let userPrefix = '';
+        if (msg.users.access_level_id === 1) {
+            userPrefix = 'Psi | ';
+        } else if (msg.users.access_level_id === 2) {
+            userPrefix = 'Adm | ';
         }
 
         userName = userPrefix + fullName;
@@ -1116,7 +1114,7 @@ async function updateOnlineCount() {
             const uniqueUsers = new Set(data.map(m => m.user_id));
             const count = uniqueUsers.size;
             document.getElementById('online-count').textContent =
-                count === 1 ? '1 usuário ativo' : `${count} usuários ativos`;
+                count === 1 ? '1' : `${count}`;
         } else {
             document.getElementById('online-count').textContent = 'CHAT PSIQUE 🌿';
         }
