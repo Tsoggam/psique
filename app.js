@@ -895,22 +895,32 @@ async function loadChatMessages() {
         if (messages && messages.length > 0) {
             const userIds = [...new Set(messages.map(m => m.user_id))];
 
-            const { data: usersData } = await supabase
+            const { data: usersData, error: usersError } = await supabase
                 .from('users')
                 .select('id, name, full_name')
                 .in('id', userIds);
 
-            const { data: accessData } = await supabase
+            if (usersError) {
+                console.error('Erro ao buscar usuários:', usersError);
+            }
+
+            const { data: accessData, error: accessError } = await supabase
                 .from('user_access')
                 .select('user_id, access_level_id')
                 .in('user_id', userIds);
+
+            if (accessError) {
+                console.error('Erro ao buscar access levels:', accessError);
+            }
 
             const usersMap = {};
             if (usersData) {
                 usersData.forEach(user => {
                     const userAccess = accessData?.find(a => a.user_id === user.id);
                     usersMap[user.id] = {
-                        ...user,
+                        id: user.id,
+                        name: user.name,
+                        full_name: user.full_name,
                         access_level_id: userAccess?.access_level_id || null
                     };
                 });
@@ -1038,17 +1048,25 @@ function subscribeToChatMessages() {
             },
             async (payload) => {
                 try {
-                    const { data: userData } = await supabase
+                    const { data: userData, error: userError } = await supabase
                         .from('users')
                         .select('id, name, full_name')
                         .eq('id', payload.new.user_id)
                         .single();
 
-                    const { data: accessData } = await supabase
+                    if (userError) {
+                        console.error('Erro ao buscar usuário:', userError);
+                    }
+
+                    const { data: accessData, error: accessError } = await supabase
                         .from('user_access')
                         .select('access_level_id')
                         .eq('user_id', payload.new.user_id)
                         .single();
+
+                    if (accessError) {
+                        console.error('Erro ao buscar access level:', accessError);
+                    }
 
                     const newMessage = {
                         id: payload.new.id,
@@ -1056,7 +1074,9 @@ function subscribeToChatMessages() {
                         created_at: payload.new.created_at,
                         user_id: payload.new.user_id,
                         users: userData ? {
-                            ...userData,
+                            id: userData.id,
+                            name: userData.name,
+                            full_name: userData.full_name,
                             access_level_id: accessData?.access_level_id || null
                         } : null
                     };
