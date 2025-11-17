@@ -794,9 +794,7 @@ function createChatElements() {
     chatButton.id = 'chat-toggle-btn';
     chatButton.className = 'chat-toggle-btn';
     chatButton.innerHTML = `
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-            <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"></path>
-        </svg>
+        <i class="fa-solid fa-comment-dots fa-beat fa-2xl"></i>
         <span class="chat-badge" id="chat-badge" style="display: none;">0</span>
     `;
 
@@ -806,7 +804,7 @@ function createChatElements() {
     chatModal.innerHTML = `
         <div class="chat-header">
             <div class="chat-header-info">
-                <h3>Chat ao Vivo</h3>
+                <h3>CHAT PSIQUE 🌿</h3>
                 <span class="chat-status">
                     <span class="status-dot"></span>
                     <span id="online-count">Carregando...</span>
@@ -835,10 +833,7 @@ function createChatElements() {
                 maxlength="500"
             />
             <button id="chat-send-btn" class="chat-send-btn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <line x1="22" y1="2" x2="11" y2="13"></line>
-                    <polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
-                </svg>
+                <i class="fa-solid fa-share fa-bounce fa-xl"></i>
             </button>
         </div>
     `;
@@ -1123,10 +1118,10 @@ async function updateOnlineCount() {
             document.getElementById('online-count').textContent =
                 count === 1 ? '1 usuário ativo' : `${count} usuários ativos`;
         } else {
-            document.getElementById('online-count').textContent = 'Chat ao vivo';
+            document.getElementById('online-count').textContent = 'CHAT PSIQUE 🌿';
         }
     } catch (error) {
-        document.getElementById('online-count').textContent = 'Chat ao vivo';
+        document.getElementById('online-count').textContent = 'CHAT PSIQUE 🌿';
     }
 }
 
