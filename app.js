@@ -373,7 +373,7 @@ async function loadFiles() {
 
 function createVideoCard(video, index, isCompleted, isLocked) {
 
-    const defaultThumbnail = "https://arwzvqicgogyfxloolxt.supabase.co/storage/v1/object/public/thumbnail/logo-psique_.png";
+    const defaultThumbnail = "https://hjeivflwulqtlkwvvmvw.supabase.co/storage/v1/object/public/thumbnail/Thumbnail.png";
 
     const card = document.createElement('div');
     card.className = 'content-card';
