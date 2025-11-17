@@ -833,7 +833,7 @@ function createChatElements() {
                 maxlength="500"
             />
             <button id="chat-send-btn" class="chat-send-btn">
-                <i class="fa-solid fa-share fa-bounce fa-xl"></i>
+                 <i class="fa-solid fa-share fa-bounce fa-xl"></i>
             </button>
         </div>
     `;
@@ -1043,46 +1043,21 @@ function subscribeToChatMessages() {
             },
             async (payload) => {
                 try {
-                    let userInfo = null;
+                    const { data: userData, error: userError } = await supabase
+                        .from('users')
+                        .select('id, name, full_name')
+                        .eq('id', payload.new.user_id)
+                        .single();
 
-                    // 1️⃣ Tenta pegar da tabela users
-                    const { data: userRow } = await supabase
-                        .from("users")
-                        .select("id, name, full_name")
-                        .eq("id", payload.new.user_id)
-                        .maybeSingle();
-
-                    if (userRow && userRow.id) {
-                        userInfo = {
-                            id: userRow.id,
-                            name: userRow.name,
-                            full_name: userRow.full_name
-                        };
-                    } else {
-                        // 2️⃣ Se não encontrar, usa auth.user
-                        const { data: authUserObj } = await supabase.auth.getUser();
-                        const authUser = authUserObj?.user;
-                        if (authUser) {
-                            userInfo = {
-                                id: payload.new.user_id,
-                                name: authUser.user_metadata?.name || authUser.email?.split("@")[0],
-                                full_name: authUser.user_metadata?.full_name ||
-                                    authUser.user_metadata?.name ||
-                                    authUser.email?.split("@")[0]
-                            };
-                        }
+                    if (userError) {
+                        console.error('Erro ao buscar usuário:', userError);
                     }
 
-                    // 3️⃣ Pega nível de acesso
-                    const { data: accessRow } = await supabase
-                        .from("user_access")
-                        .select("access_level_id")
-                        .eq("user_id", payload.new.user_id)
-                        .maybeSingle();
-
-                    if (accessRow) {
-                        userInfo.access_level_id = accessRow.access_level_id;
-                    }
+                    const { data: accessData, error: accessError } = await supabase
+                        .from('user_access')
+                        .select('access_level_id')
+                        .eq('user_id', payload.new.user_id)
+                        .single();
 
                     if (accessError) {
                         console.error('Erro ao buscar access level:', accessError);
