@@ -897,20 +897,22 @@ async function loadChatMessages() {
 
             const { data: usersData } = await supabase
                 .from('users')
-                .select(`
-                    id, 
-                    name, 
-                    full_name,
-                    user_access (
-                        access_level_id
-                    )
-                `)
+                .select('id, name, full_name')
                 .in('id', userIds);
+
+            const { data: accessData } = await supabase
+                .from('user_access')
+                .select('user_id, access_level_id')
+                .in('user_id', userIds);
 
             const usersMap = {};
             if (usersData) {
                 usersData.forEach(user => {
-                    usersMap[user.id] = user;
+                    const userAccess = accessData?.find(a => a.user_id === user.id);
+                    usersMap[user.id] = {
+                        ...user,
+                        access_level_id: userAccess?.access_level_id || null
+                    };
                 });
             }
 
@@ -967,12 +969,10 @@ function createMessageElement(msg) {
     if (msg.users) {
         const fullName = msg.users.full_name || msg.users.name || 'Usuário';
 
-        if (msg.users.user_access && msg.users.user_access.length > 0) {
-            const accessLevelId = msg.users.user_access[0].access_level_id;
-
-            if (accessLevelId === 1) {
+        if (msg.users.access_level_id) {
+            if (msg.users.access_level_id === 1) {
                 userPrefix = 'Psi | ';
-            } else if (accessLevelId === 2) {
+            } else if (msg.users.access_level_id === 2) {
                 userPrefix = 'Adm | ';
             }
         }
@@ -1040,15 +1040,14 @@ function subscribeToChatMessages() {
                 try {
                     const { data: userData } = await supabase
                         .from('users')
-                        .select(`
-                            id, 
-                            name, 
-                            full_name,
-                            user_access (
-                                access_level_id
-                            )
-                        `)
+                        .select('id, name, full_name')
                         .eq('id', payload.new.user_id)
+                        .single();
+
+                    const { data: accessData } = await supabase
+                        .from('user_access')
+                        .select('access_level_id')
+                        .eq('user_id', payload.new.user_id)
                         .single();
 
                     const newMessage = {
@@ -1056,7 +1055,10 @@ function subscribeToChatMessages() {
                         message: payload.new.message,
                         created_at: payload.new.created_at,
                         user_id: payload.new.user_id,
-                        users: userData || null
+                        users: userData ? {
+                            ...userData,
+                            access_level_id: accessData?.access_level_id || null
+                        } : null
                     };
 
                     chatMessages.push(newMessage);
