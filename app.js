@@ -1043,21 +1043,46 @@ function subscribeToChatMessages() {
             },
             async (payload) => {
                 try {
-                    const { data: userData, error: userError } = await supabase
-                        .from('users')
-                        .select('id, name, full_name')
-                        .eq('id', payload.new.user_id)
+                    let userInfo = null;
+
+                    // 1️⃣ Tenta pegar da tabela users
+                    const { data: userRow } = await supabase
+                        .from("users")
+                        .select("id, name, full_name")
+                        .eq("id", payload.new.user_id)
                         .maybeSingle();
 
-                    if (userError) {
-                        console.error('Erro ao buscar usuário:', userError);
+                    if (userRow && userRow.id) {
+                        userInfo = {
+                            id: userRow.id,
+                            name: userRow.name,
+                            full_name: userRow.full_name
+                        };
+                    } else {
+                        // 2️⃣ Se não encontrar, usa auth.user
+                        const { data: authUserObj } = await supabase.auth.getUser();
+                        const authUser = authUserObj?.user;
+                        if (authUser) {
+                            userInfo = {
+                                id: payload.new.user_id,
+                                name: authUser.user_metadata?.name || authUser.email?.split("@")[0],
+                                full_name: authUser.user_metadata?.full_name ||
+                                    authUser.user_metadata?.name ||
+                                    authUser.email?.split("@")[0]
+                            };
+                        }
                     }
 
-                    const { data: accessData, error: accessError } = await supabase
-                        .from('user_access')
-                        .select('access_level_id')
-                        .eq('user_id', payload.new.user_id)
+                    // 3️⃣ Pega nível de acesso
+                    const { data: accessRow } = await supabase
+                        .from("user_access")
+                        .select("access_level_id")
+                        .eq("user_id", payload.new.user_id)
                         .maybeSingle();
+
+                    if (accessRow) {
+                        userInfo.access_level_id = accessRow.access_level_id;
+                    }
 
                     if (accessError) {
                         console.error('Erro ao buscar access level:', accessError);
