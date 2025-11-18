@@ -879,9 +879,20 @@ async function loadChatMessages() {
     messagesContainer.innerHTML = '<div class="chat-loading"><div class="spinner"></div><p>Carregando...</p></div>';
 
     try {
+        // Busca mensagens COM JOIN para pegar dados do usuário e access_level de uma vez
         const { data: messages, error } = await supabase
             .from('chat_messages')
-            .select('id, message, created_at, user_id')
+            .select(`
+                id, 
+                message, 
+                created_at, 
+                user_id,
+                users!inner (
+                    id,
+                    name,
+                    full_name
+                )
+            `)
             .order('created_at', { ascending: true })
             .limit(100);
 
@@ -890,15 +901,7 @@ async function loadChatMessages() {
         if (messages && messages.length > 0) {
             const userIds = [...new Set(messages.map(m => m.user_id))];
 
-            const { data: usersData, error: usersError } = await supabase
-                .from('users')
-                .select('id, name, full_name')
-                .in('id', userIds);
-
-            if (usersError) {
-                console.error('Erro ao buscar usuários:', usersError);
-            }
-
+            // Busca access_levels de todos os usuários de uma vez
             const { data: accessData, error: accessError } = await supabase
                 .from('user_access')
                 .select('user_id, access_level_id')
@@ -908,22 +911,21 @@ async function loadChatMessages() {
                 console.error('Erro ao buscar access levels:', accessError);
             }
 
-            const usersMap = {};
-            if (usersData) {
-                usersData.forEach(user => {
-                    const userAccess = accessData?.find(a => a.user_id === user.id);
-                    usersMap[user.id] = {
-                        id: user.id,
-                        name: user.name,
-                        full_name: user.full_name,
-                        access_level_id: userAccess?.access_level_id || null
-                    };
+            // Cria um mapa de user_id -> access_level_id para lookup rápido
+            const accessMap = {};
+            if (accessData) {
+                accessData.forEach(a => {
+                    accessMap[a.user_id] = a.access_level_id;
                 });
             }
 
+            // Mapeia as mensagens com os dados completos
             chatMessages = messages.map(msg => ({
                 ...msg,
-                users: usersMap[msg.user_id] || null
+                users: {
+                    ...msg.users,
+                    access_level_id: accessMap[msg.user_id] || null
+                }
             }));
         } else {
             chatMessages = [];
@@ -1006,7 +1008,10 @@ async function sendMessage() {
     if (!message || !currentUser) return;
 
     const sendBtn = document.getElementById('chat-send-btn');
+    const originalContent = sendBtn.innerHTML;
+
     sendBtn.disabled = true;
+    sendBtn.innerHTML = '<div class="spinner" style="width:20px;height:20px;border-width:2px;"></div>';
 
     try {
         const { error } = await supabase
@@ -1023,8 +1028,10 @@ async function sendMessage() {
     } catch (error) {
         console.error('Erro ao enviar mensagem:', error);
         showToast('❌ Erro ao enviar mensagem');
+        sendBtn.innerHTML = originalContent;
     } finally {
         sendBtn.disabled = false;
+        sendBtn.innerHTML = originalContent;
         input.focus();
     }
 }
@@ -1041,46 +1048,34 @@ function subscribeToChatMessages() {
             },
             async (payload) => {
                 try {
-                    // Busca dados do usuário
-                    const { data: userData, error: userError } = await supabase
+                    // Faz apenas 1 query com JOIN para buscar usuário E access_level
+                    const { data, error } = await supabase
                         .from('users')
-                        .select('id, name, full_name')
+                        .select(`
+                            id,
+                            name,
+                            full_name,
+                            user_access!inner (
+                                access_level_id
+                            )
+                        `)
                         .eq('id', payload.new.user_id)
                         .single();
 
-                    if (userError) {
-                        console.error('Erro ao buscar usuário:', userError);
+                    if (error) {
+                        console.error('Erro ao buscar dados do usuário:', error);
                     }
-
-                    // Busca access_level_id - usando limit(1) ao invés de single()
-                    const { data: accessData, error: accessError } = await supabase
-                        .from('user_access')
-                        .select('access_level_id')
-                        .eq('user_id', payload.new.user_id)
-                        .limit(1);
-
-                    if (accessError) {
-                        console.error('Erro ao buscar access level:', accessError);
-                    }
-
-                    // Extrai o access_level_id de forma segura
-                    const userAccessLevel = accessData && accessData.length > 0
-                        ? accessData[0].access_level_id
-                        : null;
-
-                    // Log para debug (remover depois)
-                    console.log('User:', userData?.full_name, 'Access Level:', userAccessLevel);
 
                     const newMessage = {
                         id: payload.new.id,
                         message: payload.new.message,
                         created_at: payload.new.created_at,
                         user_id: payload.new.user_id,
-                        users: userData ? {
-                            id: userData.id,
-                            name: userData.name,
-                            full_name: userData.full_name,
-                            access_level_id: userAccessLevel
+                        users: data ? {
+                            id: data.id,
+                            name: data.name,
+                            full_name: data.full_name,
+                            access_level_id: data.user_access?.[0]?.access_level_id || null
                         } : null
                     };
 
