@@ -879,20 +879,10 @@ async function loadChatMessages() {
     messagesContainer.innerHTML = '<div class="chat-loading"><div class="spinner"></div><p>Carregando...</p></div>';
 
     try {
-        // Busca mensagens COM JOIN para pegar dados do usuário e access_level de uma vez
+        // Busca mensagens
         const { data: messages, error } = await supabase
             .from('chat_messages')
-            .select(`
-                id, 
-                message, 
-                created_at, 
-                user_id,
-                users!inner (
-                    id,
-                    name,
-                    full_name
-                )
-            `)
+            .select('id, message, created_at, user_id')
             .order('created_at', { ascending: true })
             .limit(100);
 
@@ -901,20 +891,29 @@ async function loadChatMessages() {
         if (messages && messages.length > 0) {
             const userIds = [...new Set(messages.map(m => m.user_id))];
 
-            // Busca access_levels de todos os usuários de uma vez
-            const { data: accessData, error: accessError } = await supabase
-                .from('user_access')
-                .select('user_id, access_level_id')
-                .in('user_id', userIds);
+            // Busca dados dos usuários E access_levels em paralelo (mais rápido!)
+            const [usersResult, accessResult] = await Promise.all([
+                supabase
+                    .from('users')
+                    .select('id, name, full_name')
+                    .in('id', userIds),
+                supabase
+                    .from('user_access')
+                    .select('user_id, access_level_id')
+                    .in('user_id', userIds)
+            ]);
 
-            if (accessError) {
-                console.error('Erro ao buscar access levels:', accessError);
+            // Cria mapas para lookup rápido
+            const usersMap = {};
+            if (usersResult.data) {
+                usersResult.data.forEach(u => {
+                    usersMap[u.id] = u;
+                });
             }
 
-            // Cria um mapa de user_id -> access_level_id para lookup rápido
             const accessMap = {};
-            if (accessData) {
-                accessData.forEach(a => {
+            if (accessResult.data) {
+                accessResult.data.forEach(a => {
                     accessMap[a.user_id] = a.access_level_id;
                 });
             }
@@ -922,10 +921,10 @@ async function loadChatMessages() {
             // Mapeia as mensagens com os dados completos
             chatMessages = messages.map(msg => ({
                 ...msg,
-                users: {
-                    ...msg.users,
+                users: usersMap[msg.user_id] ? {
+                    ...usersMap[msg.user_id],
                     access_level_id: accessMap[msg.user_id] || null
-                }
+                } : null
             }));
         } else {
             chatMessages = [];
