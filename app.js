@@ -879,7 +879,6 @@ async function loadChatMessages() {
     messagesContainer.innerHTML = '<div class="chat-loading"><div class="spinner"></div><p>Carregando...</p></div>';
 
     try {
-        // Busca mensagens
         const { data: messages, error } = await supabase
             .from('chat_messages')
             .select('id, message, created_at, user_id')
@@ -891,7 +890,6 @@ async function loadChatMessages() {
         if (messages && messages.length > 0) {
             const userIds = [...new Set(messages.map(m => m.user_id))];
 
-            // Busca dados dos usuários E access_levels em paralelo (mais rápido!)
             const [usersResult, accessResult] = await Promise.all([
                 supabase
                     .from('users')
@@ -903,7 +901,6 @@ async function loadChatMessages() {
                     .in('user_id', userIds)
             ]);
 
-            // Cria mapas para lookup rápido
             const usersMap = {};
             if (usersResult.data) {
                 usersResult.data.forEach(u => {
@@ -918,7 +915,6 @@ async function loadChatMessages() {
                 });
             }
 
-            // Mapeia as mensagens com os dados completos
             chatMessages = messages.map(msg => ({
                 ...msg,
                 users: usersMap[msg.user_id] ? {
@@ -1047,7 +1043,6 @@ function subscribeToChatMessages() {
             },
             async (payload) => {
                 try {
-                    // Faz apenas 1 query com JOIN para buscar usuário E access_level
                     const { data, error } = await supabase
                         .from('users')
                         .select(`
