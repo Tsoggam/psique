@@ -82,26 +82,13 @@ async function handleLogin(event) {
 }
 
 async function handleLogout() {
-    if (chatOpen) {
-        const modal = document.getElementById('chat-modal');
-        const button = document.getElementById('chat-toggle-btn');
-        if (modal) modal.classList.remove('active');
-        if (button) button.classList.remove('active');
-        chatOpen = false;
+    try {
+        await supabase.auth.signOut();
+        window.location.reload();
+    } catch (error) {
+        console.error('Erro no logout:', error);
+        window.location.reload();
     }
-
-    if (chatSubscription) {
-        supabase.removeChannel(chatSubscription);
-        chatSubscription = null;
-    }
-
-    await supabase.auth.signOut();
-    currentUserLevel = null;
-    currentUser = null;
-    document.getElementById('login-screen').classList.add('active');
-    document.getElementById('member-screen').classList.remove('active');
-    document.getElementById('email').value = '';
-    document.getElementById('password').value = '';
 }
 
 async function showMemberScreen() {
@@ -862,7 +849,7 @@ function createChatElements() {
     });
 }
 
-function toggleChat() {
+async function toggleChat() {
     chatOpen = !chatOpen;
     const modal = document.getElementById('chat-modal');
     const button = document.getElementById('chat-toggle-btn');
@@ -870,8 +857,6 @@ function toggleChat() {
     if (chatOpen) {
         modal.classList.add('active');
         button.classList.add('active');
-        loadChatMessages();
-        subscribeToChatMessages();
         document.getElementById('chat-input').focus();
 
         const badge = document.getElementById('chat-badge');
@@ -880,10 +865,6 @@ function toggleChat() {
     } else {
         modal.classList.remove('active');
         button.classList.remove('active');
-        if (chatSubscription) {
-            supabase.removeChannel(chatSubscription);
-            chatSubscription = null;
-        }
     }
 }
 
@@ -1044,7 +1025,12 @@ async function sendMessage() {
     }
 }
 
-function subscribeToChatMessages() {
+async function subscribeToChatMessages() {
+    if (chatSubscription) {
+        await supabase.removeChannel(chatSubscription);
+        chatSubscription = null;
+    }
+
     chatSubscription = supabase
         .channel('chat_messages_channel')
         .on(
@@ -1145,15 +1131,31 @@ const originalShowMemberScreen = showMemberScreen;
 showMemberScreen = async function () {
     await originalShowMemberScreen.call(this);
 
-    if (!document.getElementById('chat-toggle-btn')) {
+    const chatBtn = document.getElementById('chat-toggle-btn');
+    const chatModal = document.getElementById('chat-modal');
+
+    if (!chatBtn) {
         createChatElements();
+        await loadChatMessages();
+        subscribeToChatMessages();
+    } else {
+        chatBtn.style.display = 'flex';
+        if (chatModal) {
+            chatModal.style.display = 'none';
+            chatModal.classList.remove('active');
+        }
+        const badge = document.getElementById('chat-badge');
+        if (badge) {
+            badge.style.display = 'none';
+            badge.textContent = '0';
+        }
     }
 };
 
 const originalHandleLogout = handleLogout;
 handleLogout = async function () {
     if (chatSubscription) {
-        supabase.removeChannel(chatSubscription);
+        await supabase.removeChannel(chatSubscription);
         chatSubscription = null;
     }
 
