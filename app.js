@@ -82,6 +82,19 @@ async function handleLogin(event) {
 }
 
 async function handleLogout() {
+    if (chatOpen) {
+        const modal = document.getElementById('chat-modal');
+        const button = document.getElementById('chat-toggle-btn');
+        if (modal) modal.classList.remove('active');
+        if (button) button.classList.remove('active');
+        chatOpen = false;
+    }
+
+    if (chatSubscription) {
+        supabase.removeChannel(chatSubscription);
+        chatSubscription = null;
+    }
+
     await supabase.auth.signOut();
     currentUserLevel = null;
     currentUser = null;
