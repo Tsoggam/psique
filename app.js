@@ -294,11 +294,28 @@ async function loadVideos() {
 
         allVideos = videos;
 
-        videos.forEach((video, index) => {
-            const isCompleted = completedVideoIds.includes(video.id);
-            const isLocked = index > 0 && !completedVideoIds.includes(videos[index - 1].id);
-            const card = createVideoCard(video, index, isCompleted, isLocked);
+        const videoHierarchy = organizeVideoHierarchy(videos);
+
+        let flatIndex = 0;
+        videoHierarchy.forEach(videoGroup => {
+            const mainVideo = videoGroup.main;
+            const isCompleted = completedVideoIds.includes(mainVideo.id);
+            const isLocked = flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+
+            const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false);
             container.appendChild(card);
+            flatIndex++;
+
+            if (videoGroup.children && videoGroup.children.length > 0) {
+                videoGroup.children.forEach(subVideo => {
+                    const subIsCompleted = completedVideoIds.includes(subVideo.id);
+                    const subIsLocked = !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+
+                    const subCard = createVideoCard(subVideo, flatIndex, subIsCompleted, subIsLocked, true);
+                    container.appendChild(subCard);
+                    flatIndex++;
+                });
+            }
         });
 
         const savedView = localStorage.getItem('viewMode') || 'grid';
@@ -311,6 +328,34 @@ async function loadVideos() {
         loading.style.display = 'none';
         container.innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Erro ao carregar vídeos</p></div>';
     }
+}
+
+function organizeVideoHierarchy(videos) {
+    const hierarchy = [];
+    const videoMap = new Map();
+
+    videos.forEach(video => {
+        videoMap.set(video.id, { main: video, children: [] });
+    });
+
+    videos.forEach(video => {
+        if (video.parent_video_id) {
+            const parent = videoMap.get(video.parent_video_id);
+            if (parent) {
+                parent.children.push(video);
+            }
+        } else {
+            hierarchy.push(videoMap.get(video.id));
+        }
+    });
+
+    hierarchy.forEach(group => {
+        if (group.children.length > 0) {
+            group.children.sort((a, b) => a.order_index - b.order_index);
+        }
+    });
+
+    return hierarchy;
 }
 
 async function loadFiles() {
@@ -371,12 +416,15 @@ async function loadFiles() {
     }
 }
 
-function createVideoCard(video, index, isCompleted, isLocked) {
-
+function createVideoCard(video, index, isCompleted, isLocked, isSubVideo) {
     const defaultThumbnail = "https://hjeivflwulqtlkwvvmvw.supabase.co/storage/v1/object/public/thumbnail/Thumbnail.png";
 
     const card = document.createElement('div');
     card.className = 'content-card';
+
+    if (isSubVideo) {
+        card.classList.add('sub-video');
+    }
 
     if (isCompleted) card.classList.add('completed');
     if (isLocked) card.classList.add('locked');
@@ -389,23 +437,30 @@ function createVideoCard(video, index, isCompleted, isLocked) {
         };
     }
 
+    const sectionNumber = video.section_number || (index + 1);
+    const sectionBadge = isSubVideo
+        ? `<span class="section-badge sub-section">${sectionNumber}</span>`
+        : `<span class="section-badge">${sectionNumber}</span>`;
+
     card.innerHTML = `
+        ${sectionBadge}
+        
         <div class="video-thumbnail">
-            <img src="${defaultThumbnail}" alt="${video.title}">
-            ${!isLocked ? '<div class="play-icon">▶</i></div>' : ''}
+            <img src="${video.thumbnail_url || defaultThumbnail}" alt="${video.title}">
+            ${!isLocked ? '<div class="play-icon">▶</div>' : ''}
         </div>
 
         ${isCompleted ? `
             <div class="completion-check">
                 <i class="fa-regular fa-square-check"></i>
-                <span></span>
+                <span>Concluído</span>
             </div>
         ` : ''}
 
         ${isLocked ? `
             <div class="completion-check locked-indicator">
                 <i class="fa-solid fa-lock"></i>
-                <span></span>
+                <span>Bloqueado</span>
             </div>
         ` : ''}
 

@@ -1283,7 +1283,6 @@ body {
     }
 }
 
-/* Modal do chat */
 .chat-modal {
     position: fixed;
     bottom: 110px;
@@ -1317,7 +1316,6 @@ body {
     }
 }
 
-/* Header do chat */
 .chat-header {
     background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
     padding: 20px;
@@ -1382,7 +1380,6 @@ body {
     transform: rotate(90deg);
 }
 
-/* Área de mensagens */
 .chat-messages {
     flex: 1;
     overflow-y: auto;
@@ -1454,7 +1451,6 @@ body {
     opacity: 0.7;
 }
 
-/* Mensagens */
 .chat-message {
     display: flex;
     margin-bottom: 8px;
@@ -1515,7 +1511,6 @@ body {
     text-align: right;
 }
 
-/* Input de mensagem */
 .chat-input-container {
     padding: 15px 20px;
     background: var(--white);
@@ -1568,7 +1563,104 @@ body {
     cursor: not-allowed;
 }
 
-/* Responsividade do chat */
+.content-card.sub-video {
+    margin-left: 40px;
+    position: relative;
+    border-left: 3px solid var(--primary);
+    opacity: 0.95;
+}
+
+.content-card.sub-video::before {
+    content: '';
+    position: absolute;
+    left: -40px;
+    top: 50%;
+    width: 37px;
+    height: 2px;
+    background: var(--primary);
+    opacity: 0.5;
+}
+
+.section-badge {
+    position: absolute;
+    top: 15px;
+    right: 15px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 13px;
+    font-weight: 700;
+    z-index: 2;
+    box-shadow: 0 4px 12px rgba(107, 155, 124, 0.3);
+}
+
+.section-badge.sub-section {
+    background: linear-gradient(135deg, #5a8a6c 0%, #4a7a5c 100%);
+    font-size: 12px;
+}
+
+.content-grid.list-view .content-card.sub-video {
+    margin-left: 60px;
+}
+
+.content-grid.list-view .content-card.sub-video::before {
+    left: -60px;
+    width: 57px;
+}
+
+@media (max-width: 768px) {
+    .content-card.sub-video {
+        margin-left: 30px;
+    }
+
+    .content-card.sub-video::before {
+        left: -30px;
+        width: 27px;
+    }
+
+    .content-grid.list-view .content-card.sub-video {
+        margin-left: 40px;
+    }
+
+    .content-grid.list-view .content-card.sub-video::before {
+        left: -40px;
+        width: 37px;
+    }
+}
+
+@media (max-width: 425px) {
+    .content-card.sub-video {
+        margin-left: 20px;
+        border-left-width: 2px;
+    }
+
+    .content-card.sub-video::before {
+        left: -20px;
+        width: 17px;
+    }
+
+    .section-badge {
+        padding: 5px 10px;
+        font-size: 12px;
+    }
+
+    .section-badge.sub-section {
+        font-size: 11px;
+    }
+}
+
+@media (max-width: 320px) {
+    .content-card.sub-video {
+        margin-left: 15px;
+    }
+
+    .content-card.sub-video::before {
+        left: -15px;
+        width: 12px;
+    }
+}
+
 @media (max-width: 768px) {
     .chat-modal {
         bottom: 100px;
@@ -1779,9 +1871,6 @@ body {
     }
 }
 
-/* Responsividade aprimorada */
-
-/* Mobile Large (até 425px) */
 @media (max-width: 425px) {
     .welcome-section h1 {
         font-size: 28px;
@@ -1870,7 +1959,6 @@ body {
     }
 }
 
-/* Mobile Medium (até 375px) */
 @media (max-width: 375px) {
     #member-screen .container {
         padding: 90px 15px 30px;
@@ -2010,7 +2098,6 @@ body {
     }
 }
 
-/* Mobile Small (até 320px) */
 @media (max-width: 320px) {
     #member-screen .container {
         padding: 85px 10px 25px;
@@ -2231,7 +2318,6 @@ body {
     }
 }
 
-/* Tablet (768px - 1024px) */
 @media (min-width: 769px) and (max-width: 1024px) {
     .welcome-section h1 {
         font-size: 32px;
@@ -2252,7 +2338,6 @@ body {
     }
 }
 
-/* Ajustes para telas muito pequenas em landscape */
 @media (max-height: 600px) and (orientation: landscape) {
     .modal-content {
         height: 98vh;
