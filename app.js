@@ -1041,6 +1041,7 @@ function subscribeToChatMessages() {
             },
             async (payload) => {
                 try {
+                    // Busca dados do usuário
                     const { data: userData, error: userError } = await supabase
                         .from('users')
                         .select('id, name, full_name')
@@ -1051,15 +1052,24 @@ function subscribeToChatMessages() {
                         console.error('Erro ao buscar usuário:', userError);
                     }
 
+                    // Busca access_level_id - usando limit(1) ao invés de single()
                     const { data: accessData, error: accessError } = await supabase
                         .from('user_access')
                         .select('access_level_id')
                         .eq('user_id', payload.new.user_id)
-                        .maybeSingle();
+                        .limit(1);
 
                     if (accessError) {
                         console.error('Erro ao buscar access level:', accessError);
                     }
+
+                    // Extrai o access_level_id de forma segura
+                    const userAccessLevel = accessData && accessData.length > 0
+                        ? accessData[0].access_level_id
+                        : null;
+
+                    // Log para debug (remover depois)
+                    console.log('User:', userData?.full_name, 'Access Level:', userAccessLevel);
 
                     const newMessage = {
                         id: payload.new.id,
@@ -1070,7 +1080,7 @@ function subscribeToChatMessages() {
                             id: userData.id,
                             name: userData.name,
                             full_name: userData.full_name,
-                            access_level_id: accessData?.access_level_id || null
+                            access_level_id: userAccessLevel
                         } : null
                     };
 
