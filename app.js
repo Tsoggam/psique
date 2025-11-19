@@ -296,9 +296,16 @@ async function loadVideos() {
 
         const videoHierarchy = organizeVideoHierarchy(videos);
 
+        // DEPOIS:
         let flatIndex = 0;
         videoHierarchy.forEach(videoGroup => {
             const mainVideo = videoGroup.main;
+
+            // Não mostra vídeos que são filhos
+            if (mainVideo.parent_video_id) {
+                return;
+            }
+
             const isCompleted = completedVideoIds.includes(mainVideo.id);
             const isLocked = flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
 
@@ -307,14 +314,7 @@ async function loadVideos() {
             flatIndex++;
 
             if (videoGroup.children && videoGroup.children.length > 0) {
-                videoGroup.children.forEach(subVideo => {
-                    const subIsCompleted = completedVideoIds.includes(subVideo.id);
-                    const subIsLocked = !completedVideoIds.includes(allVideos[flatIndex - 1].id);
-
-                    const subCard = createVideoCard(subVideo, flatIndex, subIsCompleted, subIsLocked, true);
-                    container.appendChild(subCard);
-                    flatIndex++;
-                });
+                flatIndex += videoGroup.children.length;
             }
         });
 
@@ -422,10 +422,6 @@ function createVideoCard(video, index, isCompleted, isLocked, isSubVideo) {
     const card = document.createElement('div');
     card.className = 'content-card';
 
-    if (isSubVideo) {
-        card.classList.add('sub-video');
-    }
-
     if (isCompleted) card.classList.add('completed');
     if (isLocked) card.classList.add('locked');
 
@@ -438,12 +434,9 @@ function createVideoCard(video, index, isCompleted, isLocked, isSubVideo) {
     }
 
     const sectionNumber = video.section_number || (index + 1);
-    const sectionBadge = isSubVideo
-        ? `<span class="section-badge sub-section">${sectionNumber}</span>`
-        : `<span class="section-badge">${sectionNumber}</span>`;
 
     card.innerHTML = `
-        ${sectionBadge}
+        <span class="section-badge">${sectionNumber}</span>
         
         <div class="video-thumbnail">
             <img src="${video.thumbnail_url || defaultThumbnail}" alt="${video.title}">
@@ -497,10 +490,12 @@ function createPlaylist() {
     document.getElementById('playlist-progress-text').textContent =
         `${completedCount} de ${allVideos.length} concluídas`;
 
+    // DEPOIS:
     allVideos.forEach((video, index) => {
         const isCompleted = completedVideoIds.includes(video.id);
         const isLocked = index > 0 && !completedVideoIds.includes(allVideos[index - 1].id);
         const isActive = index === currentVideoIndex;
+        const isSubVideo = video.parent_video_id !== null;
 
         const item = document.createElement('div');
         item.className = 'playlist-item';
@@ -510,16 +505,18 @@ function createPlaylist() {
         if (isCompleted) item.classList.add('completed');
         if (isLocked) item.classList.add('locked');
         if (isActive) item.classList.add('active');
+        if (isSubVideo) item.classList.add('sub-video');
 
         const statusText = isLocked ? 'Bloqueado' : isCompleted ? 'Concluído' : 'Não iniciado';
+        const sectionNumber = video.section_number || (index + 1);
 
         item.innerHTML = `
-            <div class="playlist-item-number">${!isLocked && !isCompleted ? index + 1 : ''}</div>
-            <div class="playlist-item-info">
-                <div class="playlist-item-title">${video.title}</div>
-                <div class="playlist-item-duration">${statusText}</div>
-            </div>
-        `;
+        <div class="playlist-item-number">${!isLocked && !isCompleted ? sectionNumber : ''}</div>
+        <div class="playlist-item-info">
+            <div class="playlist-item-title">${video.title}</div>
+            <div class="playlist-item-duration">${statusText}</div>
+        </div>
+    `;
 
         if (!isLocked) {
             item.onclick = () => {
@@ -546,7 +543,7 @@ async function openVideoModal(video, index) {
         .select('completed')
         .eq('user_id', currentUser.id)
         .eq('video_id', video.id)
-        .single();
+        .maybeSingle();
 
     const isCompleted = progressData?.completed || false;
 
@@ -1205,6 +1202,23 @@ showMemberScreen = async function () {
             badge.textContent = '0';
         }
     }
+};
+
+const originalConsoleError = console.error;
+console.error = function (...args) {
+    const errorString = args.join(' ');
+
+    if (
+        errorString.includes('Content Security Policy') ||
+        errorString.includes('frame-ancestors') ||
+        errorString.includes('ssl.gstatic.com') ||
+        errorString.includes('drive.google.com') ||
+        errorString.includes('aria-hidden')
+    ) {
+        return;
+    }
+
+    originalConsoleError.apply(console, args);
 };
 
 const originalHandleLogout = handleLogout;

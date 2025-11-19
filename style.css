@@ -1129,6 +1129,28 @@ body {
     gap: 12px;
 }
 
+.playlist-item.sub-video {
+    margin-left: 30px;
+    position: relative;
+    background: var(--bg-lighter);
+    border-left: 3px solid var(--primary);
+}
+
+.playlist-item.sub-video::before {
+    content: '';
+    position: absolute;
+    left: -30px;
+    top: 50%;
+    width: 27px;
+    height: 2px;
+    background: var(--primary);
+    opacity: 0.5;
+}
+
+.playlist-item.sub-video .playlist-item-number {
+    background: rgba(107, 155, 124, 0.2);
+}
+
 .playlist-item:hover {
     transform: translateX(5px);
     border-color: var(--primary);
