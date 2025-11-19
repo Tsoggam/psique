@@ -1239,6 +1239,39 @@ handleLogout = async function () {
     await originalHandleLogout.call(this);
 };
 
+function initAntiInspect() {
+    document.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        return false;
+    });
+
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'F12' || e.keyCode === 123) {
+            e.preventDefault();
+            return false;
+        }
+
+        if (e.ctrlKey && (e.shiftKey || e.key === 'u' || e.key === 'U')) {
+            if (['i', 'I', 'j', 'J', 'c', 'C', 'u', 'U'].includes(e.key)) {
+                e.preventDefault();
+                return false;
+            }
+        }
+    });
+
+    setInterval(() => {
+        const startTime = performance.now();
+        debugger;
+        const endTime = performance.now();
+
+        if (endTime - startTime > 100) {
+            console.clear();
+        }
+    }, 1000);
+}
+
+initAntiInspect();
+
 const style = document.createElement('style');
 style.textContent = `
     @keyframes slideInUp {
