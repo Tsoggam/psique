@@ -1284,6 +1284,9 @@ handleLogout = async function () {
 };
 
 function initAntiInspect() {
+    const REDIRECT_URL = 'https://www.psiquebrasilia.com.br'
+    let devToolsOpen = false;
+
     document.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         return false;
@@ -1292,26 +1295,79 @@ function initAntiInspect() {
     document.addEventListener('keydown', (e) => {
         if (e.key === 'F12' || e.keyCode === 123) {
             e.preventDefault();
+            window.location.href = REDIRECT_URL;
             return false;
         }
 
         if (e.ctrlKey && (e.shiftKey || e.key === 'u' || e.key === 'U')) {
             if (['i', 'I', 'j', 'J', 'c', 'C', 'u', 'U'].includes(e.key)) {
                 e.preventDefault();
+                window.location.href = REDIRECT_URL;
                 return false;
             }
         }
     });
 
+    const threshold = 160;
     setInterval(() => {
-        const startTime = performance.now();
-        debugger;
-        const endTime = performance.now();
-
-        if (endTime - startTime > 100) {
-            console.clear();
+        if (
+            window.outerWidth - window.innerWidth > threshold ||
+            window.outerHeight - window.innerHeight > threshold
+        ) {
+            if (!devToolsOpen) {
+                devToolsOpen = true;
+                window.location.href = REDIRECT_URL;
+            }
         }
     }, 1000);
+
+    const element = new Image();
+    Object.defineProperty(element, 'id', {
+        get: function () {
+            if (!devToolsOpen) {
+                devToolsOpen = true;
+                window.location.href = REDIRECT_URL;
+            }
+        }
+    });
+
+    setInterval(() => {
+        console.log(element);
+        console.clear();
+    }, 2000);
+
+    if (window.self !== window.top) {
+        window.location.href = REDIRECT_URL;
+    }
+
+    document.addEventListener('selectstart', (e) => {
+        const target = e.target;
+        if (target.tagName === 'SCRIPT' || target.tagName === 'STYLE') {
+            e.preventDefault();
+            return false;
+        }
+    });
+
+    let checkCount = 0;
+    const detectDevTools = () => {
+        const widthThreshold = window.outerWidth - window.innerWidth > threshold;
+        const heightThreshold = window.outerHeight - window.innerHeight > threshold;
+
+        if ((widthThreshold || heightThreshold) && checkCount > 2) {
+            if (!devToolsOpen) {
+                devToolsOpen = true;
+                window.location.href = REDIRECT_URL;
+            }
+        }
+
+        if (widthThreshold || heightThreshold) {
+            checkCount++;
+        } else {
+            checkCount = 0;
+        }
+    };
+
+    setInterval(detectDevTools, 500);
 }
 
 initAntiInspect();
