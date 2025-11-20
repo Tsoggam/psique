@@ -2149,11 +2149,26 @@ body {
     }
 }
 
+@media (max-width: 480px) and (orientation: landscape) {
+    .chat-modal {
+        max-height: 85vh !important;
+    }
+
+    .chat-messages {
+        max-height: calc(85vh - 140px);
+    }
+}
+
 @media (max-width: 480px) {
     .chat-modal {
         position: fixed;
-        bottom: 15px;
-        max-height: 60vh !important;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        max-height: 75vh !important;
+        border-radius: 20px 20px 0 0;
+        margin: 0;
     }
 
     .chat-modal.active {
@@ -2164,11 +2179,31 @@ body {
     .chat-messages {
         flex: 1;
         overflow-y: auto;
-        max-height: calc(60vh - 140px);
+        max-height: calc(75vh - 140px);
+        padding-bottom: 20px;
+        scroll-behavior: smooth;
     }
 
     .chat-input-container {
         flex-shrink: 0;
+        background: var(--white);
+        padding: 15px;
+        border-top: 2px solid var(--border);
+        position: sticky;
+        bottom: 0;
+        z-index: 10;
+    }
+
+    #chat-input {
+        font-size: 16px !important;
+        padding: 12px 16px;
+        border-radius: 20px;
+    }
+
+    .chat-toggle-btn {
+        bottom: 20px;
+        right: 20px;
+        z-index: 1000;
     }
 
     .modal {

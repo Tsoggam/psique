@@ -296,12 +296,10 @@ async function loadVideos() {
 
         const videoHierarchy = organizeVideoHierarchy(videos);
 
-        // DEPOIS:
         let flatIndex = 0;
         videoHierarchy.forEach(videoGroup => {
             const mainVideo = videoGroup.main;
 
-            // Não mostra vídeos que são filhos
             if (mainVideo.parent_video_id) {
                 return;
             }
@@ -490,7 +488,6 @@ function createPlaylist() {
     document.getElementById('playlist-progress-text').textContent =
         `${completedCount} de ${allVideos.length} concluídas`;
 
-    // DEPOIS:
     allVideos.forEach((video, index) => {
         const isCompleted = completedVideoIds.includes(video.id);
         const isLocked = index > 0 && !completedVideoIds.includes(allVideos[index - 1].id);
