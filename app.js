@@ -7,6 +7,11 @@ let completedVideoIds = [];
 let chatOpen = false;
 let chatSubscription = null;
 let chatMessages = [];
+let isLoadingVideos = false;
+let isLoadingFiles = false;
+let isSendingMessage = false;
+let isLoadingChat = false;
+let subscribeTimeout = null;
 
 const themeToggle = document.getElementById('theme-toggle');
 const savedTheme = localStorage.getItem('theme') || 'light';
@@ -244,6 +249,11 @@ async function loadVideoFiles(videoId) {
 }
 
 async function loadVideos() {
+    if (isLoadingVideos) {
+        return;
+    }
+    isLoadingVideos = true;
+
     const loading = document.getElementById('videos-loading');
     const container = document.getElementById('videos-container');
     const noVideos = document.getElementById('no-videos');
@@ -325,6 +335,8 @@ async function loadVideos() {
         console.error('Erro ao carregar vídeos:', error);
         loading.style.display = 'none';
         container.innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Erro ao carregar vídeos</p></div>';
+    } finally {
+        isLoadingVideos = false;
     }
 }
 
@@ -357,6 +369,12 @@ function organizeVideoHierarchy(videos) {
 }
 
 async function loadFiles() {
+
+    if (isLoadingFiles) {
+        return;
+    }
+
+    isLoadingFiles = true;
     const loading = document.getElementById('files-loading');
     const container = document.getElementById('files-container');
     const noFiles = document.getElementById('no-files');
@@ -411,6 +429,8 @@ async function loadFiles() {
         console.error('Erro ao carregar arquivos:', error);
         loading.style.display = 'none';
         container.innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Erro ao carregar materiais</p></div>';
+    } finally {
+        isLoadingFiles = false;
     }
 }
 
@@ -839,6 +859,11 @@ function showToast(message) {
 }
 
 function createChatElements() {
+
+    if (document.getElementById('chat-toggle-btn')) {
+        return;
+    }
+
     const chatButton = document.createElement('button');
     chatButton.id = 'chat-toggle-btn';
     chatButton.className = 'chat-toggle-btn';
@@ -918,6 +943,12 @@ async function toggleChat() {
 }
 
 async function loadChatMessages() {
+
+    if (isLoadingChat) {
+        return;
+    }
+    isLoadingChat = true;
+
     const messagesContainer = document.getElementById('chat-messages');
     messagesContainer.innerHTML = '<div class="chat-loading"><div class="spinner"></div><p>Carregando...</p></div>';
 
@@ -975,6 +1006,8 @@ async function loadChatMessages() {
     } catch (error) {
         console.error('Erro ao carregar mensagens:', error);
         messagesContainer.innerHTML = '<div class="chat-error">Erro ao carregar mensagens</div>';
+    } finally {
+        isLoadingChat = false;
     }
 }
 
@@ -1040,10 +1073,17 @@ function createMessageElement(msg) {
 }
 
 async function sendMessage() {
+
+    if (isSendingMessage) {
+        return;
+    }
+
     const input = document.getElementById('chat-input');
     const message = input.value.trim();
 
     if (!message || !currentUser) return;
+
+    isSendingMessage = true;
 
     const sendBtn = document.getElementById('chat-send-btn');
     const originalContent = sendBtn.innerHTML;
@@ -1068,6 +1108,7 @@ async function sendMessage() {
         showToast('❌ Erro ao enviar mensagem');
         sendBtn.innerHTML = originalContent;
     } finally {
+        isSendingMessage = false;
         sendBtn.disabled = false;
         sendBtn.innerHTML = originalContent;
         input.focus();
@@ -1075,25 +1116,30 @@ async function sendMessage() {
 }
 
 async function subscribeToChatMessages() {
-    if (chatSubscription) {
-        await supabase.removeChannel(chatSubscription);
-        chatSubscription = null;
+    if (subscribeTimeout) {
+        clearTimeout(subscribeTimeout);
     }
 
-    chatSubscription = supabase
-        .channel('chat_messages_channel')
-        .on(
-            'postgres_changes',
-            {
-                event: 'INSERT',
-                schema: 'public',
-                table: 'chat_messages'
-            },
-            async (payload) => {
-                try {
-                    const { data, error } = await supabase
-                        .from('users')
-                        .select(`
+    subscribeTimeout = setTimeout(async () => {
+        if (chatSubscription) {
+            await supabase.removeChannel(chatSubscription);
+            chatSubscription = null;
+        }
+
+        chatSubscription = supabase
+            .channel('chat_messages_channel')
+            .on(
+                'postgres_changes',
+                {
+                    event: 'INSERT',
+                    schema: 'public',
+                    table: 'chat_messages'
+                },
+                async (payload) => {
+                    try {
+                        const { data, error } = await supabase
+                            .from('users')
+                            .select(`
                             id,
                             name,
                             full_name,
@@ -1101,51 +1147,52 @@ async function subscribeToChatMessages() {
                                 access_level_id
                             )
                         `)
-                        .eq('id', payload.new.user_id)
-                        .single();
+                            .eq('id', payload.new.user_id)
+                            .single();
 
-                    if (error) {
-                        console.error('Erro ao buscar dados do usuário:', error);
+                        if (error) {
+                            console.error('Erro ao buscar dados do usuário:', error);
+                        }
+
+                        const newMessage = {
+                            id: payload.new.id,
+                            message: payload.new.message,
+                            created_at: payload.new.created_at,
+                            user_id: payload.new.user_id,
+                            users: data ? {
+                                id: data.id,
+                                name: data.name,
+                                full_name: data.full_name,
+                                access_level_id: data.user_access?.[0]?.access_level_id || null
+                            } : null
+                        };
+
+                        chatMessages.push(newMessage);
+
+                        const messagesContainer = document.getElementById('chat-messages');
+
+                        const emptyState = messagesContainer.querySelector('.chat-empty');
+                        if (emptyState) {
+                            messagesContainer.innerHTML = '';
+                        }
+
+                        const messageEl = createMessageElement(newMessage);
+                        messagesContainer.appendChild(messageEl);
+                        messagesContainer.scrollTop = messagesContainer.scrollHeight;
+
+                        if (!chatOpen && newMessage.user_id !== currentUser?.id) {
+                            const badge = document.getElementById('chat-badge');
+                            const currentCount = parseInt(badge.textContent) || 0;
+                            badge.textContent = currentCount + 1;
+                            badge.style.display = 'flex';
+                        }
+                    } catch (error) {
+                        console.error('Erro ao processar nova mensagem:', error);
                     }
-
-                    const newMessage = {
-                        id: payload.new.id,
-                        message: payload.new.message,
-                        created_at: payload.new.created_at,
-                        user_id: payload.new.user_id,
-                        users: data ? {
-                            id: data.id,
-                            name: data.name,
-                            full_name: data.full_name,
-                            access_level_id: data.user_access?.[0]?.access_level_id || null
-                        } : null
-                    };
-
-                    chatMessages.push(newMessage);
-
-                    const messagesContainer = document.getElementById('chat-messages');
-
-                    const emptyState = messagesContainer.querySelector('.chat-empty');
-                    if (emptyState) {
-                        messagesContainer.innerHTML = '';
-                    }
-
-                    const messageEl = createMessageElement(newMessage);
-                    messagesContainer.appendChild(messageEl);
-                    messagesContainer.scrollTop = messagesContainer.scrollHeight;
-
-                    if (!chatOpen && newMessage.user_id !== currentUser?.id) {
-                        const badge = document.getElementById('chat-badge');
-                        const currentCount = parseInt(badge.textContent) || 0;
-                        badge.textContent = currentCount + 1;
-                        badge.style.display = 'flex';
-                    }
-                } catch (error) {
-                    console.error('Erro ao processar nova mensagem:', error);
                 }
-            }
-        )
-        .subscribe();
+            )
+            .subscribe();
+    }, 500);
 }
 
 async function updateOnlineCount() {
