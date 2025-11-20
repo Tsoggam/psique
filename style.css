@@ -2229,70 +2229,81 @@ body {
     }
 }
 
-@media (min-width: 375px) and (max-width: 479px) {
+@media (max-width: 479px) {
+    .logo-circle-small {
+        display: none !important;
+    }
+
+    .view-toggle {
+        display: none !important;
+    }
+}
+
+@media (min-width: 375) and (max-width: 479px) {
+
     #member-screen .container {
-        padding: 85px 15px 30px;
+        padding: 75px 12px 30px;
+    }
+
+    .theme-toggle {
+        top: 15px;
+        right: 5px;
     }
 
     .welcome-section {
-        padding: 30px 15px;
-        margin-bottom: 30px;
+        padding: 20px 15px;
+        margin-bottom: 15px;
+        border-radius: 15px;
     }
 
     .welcome-section h1 {
-        font-size: 24px;
+        font-size: 22px;
+        line-height: 1.3;
+        margin-bottom: 8px;
     }
 
     .welcome-section p {
         font-size: 14px;
     }
 
-    .card {
-        padding: 35px 25px;
+    .tabs-container {
+        flex-direction: row;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 0;
+        gap: 12px;
     }
 
-    .card h1 {
-        font-size: 28px;
-    }
-
-    .logo-circle {
-        width: 80px;
-        height: 80px;
-    }
-
-    .img-logo {
-        width: 50px;
-        height: 50px;
-    }
-
-    .nav-content {
-        padding: 15px 20px;
-    }
-
-    .logo-circle-small {
-        width: 35px;
-        height: 35px;
-    }
-
-    .img-members {
-        width: 18px;
-        height: 18px;
-    }
-
-    .btn-logout {
-        padding: 10px 18px;
-        font-size: 13px;
+    .tabs {
+        gap: 12px;
+        flex: 1;
     }
 
     .tab {
-        padding: 10px 18px;
+        padding: 12px 16px;
         font-size: 14px;
     }
 
     .view-btn {
-        width: 38px;
-        height: 38px;
-        font-size: 14px;
+        width: 40px;
+        height: 40px;
+        font-size: 16px;
+    }
+
+    .nav-content {
+        padding: 12px 15px;
+        gap: 10px;
+    }
+
+    .logo-circle-small {
+        width: 34px;
+        height: 34px;
+    }
+
+    .img-members {
+        width: 17px;
+        height: 17px;
     }
 
     .content-grid {
@@ -2301,7 +2312,7 @@ body {
     }
 
     .content-card {
-        padding: 18px;
+        padding: 16px;
     }
 
     .content-card h3 {
@@ -2313,151 +2324,108 @@ body {
     }
 
     .video-thumbnail {
-        height: 140px;
+        height: 135px;
+        margin-bottom: 12px;
     }
 
-    .play-icon {
-        width: 50px;
-        height: 50px;
-        font-size: 20px;
+    .modal-content {
+        width: 100%;
+        height: 100%;
+        max-height: 100vh;
+        border-radius: 0;
+        top: 0;
+        left: 0;
+        transform: none;
     }
 
-    .file-card {
-        padding: 20px;
-    }
-
-    .file-icon {
-        font-size: 48px;
-        margin-bottom: 15px;
-    }
-
-    .file-card h3 {
-        font-size: 18px;
-    }
-
-    .file-card p {
-        font-size: 14px;
-    }
-
-    .btn {
-        padding: 14px 24px;
-        font-size: 14px;
-    }
-
-    .theme-toggle {
-        top: 70px;
-        right: 12px;
-        width: 40px;
-        height: 40px;
+    .video-player {
+        width: 100%;
+        aspect-ratio: 16/9;
+        max-height: 40vh;
     }
 
     .video-info-section {
         padding: 15px;
+        overflow-y: auto;
+    }
+
+    .video-header {
+        flex-direction: column;
+        gap: 10px;
+        align-items: flex-start;
     }
 
     .video-header h2 {
-        font-size: 20px;
-    }
-
-    #video-description {
-        font-size: 14px;
+        font-size: 18px;
+        margin-top: 0;
     }
 
     .video-actions {
         gap: 10px;
+        flex-direction: column;
+    }
+
+    .btn-complete,
+    .btn-next-video {
+        width: 100%;
+        min-width: 100%;
+        padding: 12px 18px;
+        font-size: 13px;
     }
 
     .close-modal {
+        top: 10px;
+        right: 10px;
         width: 38px;
         height: 38px;
+        z-index: 1000;
     }
 
     .video-files-header {
         flex-direction: column;
         align-items: flex-start;
-        gap: var(--spacing-sm);
+        gap: 8px;
     }
 
-    .files-count {
-        font-size: 12px;
-        padding: 5px 12px;
+    .video-files-header h3 {
+        font-size: 16px;
     }
 
-    .video-file-icon {
-        font-size: 32px;
-        min-width: 45px;
-        height: 45px;
+    .video-file-item {
+        flex-direction: column;
+        align-items: flex-start;
+        gap: 10px;
+        padding: 12px;
     }
 
-    .video-file-info h4 {
-        font-size: 14px;
-    }
-
-    .video-file-info p {
-        font-size: 12px;
+    .video-file-info {
+        width: 100%;
     }
 
     .btn-download {
-        padding: 10px 18px;
-        font-size: 13px;
+        padding: 10px 16px;
+        font-size: 12px;
         width: 100%;
         justify-content: center;
     }
 
-    .video-file-item {
-        flex-wrap: wrap;
-        gap: 12px;
-        padding: 14px;
-    }
-
     .chat-modal {
-        bottom: 90px;
+        bottom: 15px;
         right: 10px;
         left: 10px;
         width: auto;
-        height: min(500px, calc(100vh - 120px));
-    }
-
-    .chat-toggle-btn {
-        bottom: 15px;
-        right: 15px;
-        width: 50px;
-        height: 50px;
-    }
-
-    .chat-header {
-        padding: 15px;
-    }
-
-    .chat-header-info h3 {
-        font-size: 16px;
-    }
-
-    .chat-status {
-        font-size: 12px;
+        max-height: calc(100vh - 180px);
+        height: auto;
     }
 
     .chat-messages {
-        padding: 15px;
+        padding: 12px;
+        max-height: calc(100vh - 300px);
     }
 
     .message-content {
-        max-width: 85%;
-        padding: 10px 14px;
-    }
-
-    .chat-input-container {
-        padding: 12px 15px;
-    }
-
-    #chat-input {
-        font-size: 13px;
-        padding: 10px 14px;
-    }
-
-    .chat-send-btn {
-        width: 40px;
-        height: 40px;
+        max-width: 80%;
+        padding: 9px 12px;
     }
 
     .content-card.sub-video {
@@ -2473,68 +2441,6 @@ body {
     .section-badge {
         padding: 5px 10px;
         font-size: 12px;
-    }
-
-    .section-badge.sub-section {
-        font-size: 11px;
-    }
-
-    .tabs-container {
-        flex-direction: column;
-        align-items: flex-start;
-        gap: var(--spacing-sm);
-    }
-
-    .view-toggle {
-        padding: var(--spacing-sm) 0 0 0;
-        width: 100%;
-        justify-content: flex-end;
-    }
-
-    .content-grid.list-view .content-card {
-        flex-direction: column;
-        gap: 15px;
-    }
-
-    .content-grid.list-view .video-thumbnail {
-        width: 100%;
-        height: 180px;
-    }
-
-    .content-grid.list-view .content-card-info {
-        width: 100%;
-    }
-
-    .content-grid.list-view .completion-check {
-        align-self: flex-start;
-    }
-
-    .content-grid.list-view .file-card {
-        flex-direction: column;
-        text-align: center;
-    }
-
-    .content-grid.list-view .file-card-info {
-        width: 100%;
-    }
-
-    .content-grid.list-view .file-card .btn {
-        width: 100%;
-    }
-
-    .modal-content {
-        width: 100%;
-        height: 100vh;
-        border-radius: 0;
-    }
-
-    .video-header {
-        flex-direction: column;
-        gap: var(--spacing-sm);
-    }
-
-    .video-header h2 {
-        font-size: 22px;
     }
 }
 
