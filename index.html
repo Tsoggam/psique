@@ -66,6 +66,73 @@
             </div>
         </nav>
 
+        <div id="admin-panel" style="display: none;">
+            <div class="container">
+                <div class="welcome-section">
+                    <h1><i class="fa-solid fa-terminal"></i> PAINEL</h1>
+                </div>
+
+                <div class="admin-stats-grid">
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-users"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-users">0</h3>
+                            <p>Total de Usuários</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-video"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-videos">0</h3>
+                            <p>Total de Vídeos</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-check-circle"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="total-completions">0</h3>
+                            <p>Vídeos Concluídos</p>
+                        </div>
+                    </div>
+
+                    <div class="stat-card">
+                        <div class="stat-icon">
+                            <i class="fa-solid fa-user-check"></i>
+                        </div>
+                        <div class="stat-info">
+                            <h3 id="active-users">0</h3>
+                            <p>Usuários Ativos (7 dias)</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="admin-charts">
+                    <div class="chart-card">
+                        <h3><i class="fa-solid fa-chart-line"></i> Progresso por Usuário</h3>
+                        <div id="user-progress-chart" class="chart-container"></div>
+                    </div>
+
+                    <div class="chart-card">
+                        <h3><i class="fa-solid fa-chart-pie"></i> Distribuição por Nível</h3>
+                        <div id="level-distribution-chart" class="chart-container"></div>
+                    </div>
+                </div>
+
+                <div class="chart-card full-width">
+                    <h3><i class="fa-solid fa-table"></i> Detalhes dos Usuários</h3>
+                    <div id="users-table" class="users-table-container"></div>
+                </div>
+            </div>
+        </div>
+
         <button id="theme-toggle" class="theme-toggle" title="Alternar tema">
             <svg class="sun-icon" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor"
                 stroke-width="2">

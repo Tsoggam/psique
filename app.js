@@ -86,6 +86,22 @@ async function handleLogin(event) {
     }
 }
 
+async function logUserActivity() {
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+
+        await supabase
+            .from('user_activity_logs')
+            .upsert({
+                user_id: user.id,
+                last_login: new Date().toISOString()
+            });
+    } catch (error) {
+        console.error('Erro ao registrar atividade:', error);
+    }
+}
+
 async function handleLogout() {
     try {
         await supabase.auth.signOut();
@@ -102,6 +118,8 @@ async function showMemberScreen() {
         if (!user) throw new Error('Usuário não encontrado');
 
         currentUser = user;
+
+        await logUserActivity();
 
         const { data: userProfile } = await supabase
             .from('users')
@@ -147,9 +165,32 @@ async function showMemberScreen() {
 
         if (currentUserLevel === 1) {
             badge.innerHTML = 'Psicólogos';
+            document.getElementById('admin-panel').style.display = 'none';
+            document.querySelector('.container').style.display = 'block';
         }
         else if (currentUserLevel === 2) {
             badge.innerHTML = 'Administrativo';
+            document.getElementById('admin-panel').style.display = 'none';
+            document.querySelector('.container').style.display = 'block';
+        }
+        else if (currentUserLevel === 3) {
+            badge.innerHTML = 'Desenvolvedor';
+
+            document.getElementById('login-screen').classList.remove('active');
+            document.getElementById('member-screen').classList.add('active');
+
+            const mainContainer = document.querySelector('#member-screen > .container');
+            if (mainContainer) mainContainer.style.display = 'none';
+
+            const adminPanel = document.getElementById('admin-panel');
+            if (adminPanel) {
+                adminPanel.style.display = 'block';
+                adminPanel.style.visibility = 'visible';
+                adminPanel.style.opacity = '1';
+            }
+
+            await loadAdminDashboard();
+            return;
         }
         else {
             badge.innerHTML = '<i class="fa-solid fa-exclamation"></i>';
@@ -315,7 +356,8 @@ async function loadVideos() {
             }
 
             const isCompleted = completedVideoIds.includes(mainVideo.id);
-            const isLocked = flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+            const isUnlocked = mainVideo.unlocked === true || flatIndex === 0;
+            const isLocked = !isUnlocked && flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
 
             const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false);
             container.appendChild(card);
@@ -1283,6 +1325,294 @@ handleLogout = async function () {
     await originalHandleLogout.call(this);
 };
 
+async function loadAdminDashboard() {
+    try {
+        console.log('🔄 Iniciando loadAdminDashboard...');
+
+        const [usersResult, videosResult, progressResult, activityResult] = await Promise.all([
+            supabase.from('users').select('id, name, full_name'),
+            supabase.from('videos').select('*'),
+            supabase.from('video_progress').select('*'),
+            supabase.from('user_activity_logs').select('user_id, last_login').order('last_login', { ascending: false })
+        ]);
+
+        if (usersResult.error) {
+            console.error('❌ Erro ao buscar users:', usersResult.error);
+            throw usersResult.error;
+        }
+
+        if (videosResult.error) {
+            console.error('❌ Erro ao buscar videos:', videosResult.error);
+        }
+
+        const users = usersResult.data || [];
+        const videos = videosResult.data || [];
+        const allProgress = progressResult.data || [];
+        const activities = activityResult.data || [];
+
+        console.log('✅ Dados carregados:', {
+            users: users.length,
+            videos: videos.length,
+            progress: allProgress.length,
+            activities: activities.length
+        });
+
+        console.log('🎬 Primeiros 3 vídeos:', videos.slice(0, 3));
+        console.log('👥 Primeiros 3 usuários:', users.slice(0, 3));
+
+        const activityMap = {};
+        activities.forEach(activity => {
+            if (!activityMap[activity.user_id]) {
+                activityMap[activity.user_id] = activity.last_login;
+            }
+        });
+
+        allProgress.forEach(progress => {
+            if (!activityMap[progress.user_id] && progress.completed_at) {
+                activityMap[progress.user_id] = progress.completed_at;
+            }
+        });
+
+        console.log('📅 ActivityMap (primeiros 5):', Object.entries(activityMap).slice(0, 5));
+
+        const totalCompletions = allProgress.filter(p => p.completed).length;
+
+        const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const activeUsers = users.filter(u => {
+            const lastLogin = activityMap[u.id];
+            return lastLogin && new Date(lastLogin) > sevenDaysAgo;
+        }).length;
+
+        document.getElementById('total-users').textContent = users.length;
+        document.getElementById('total-videos').textContent = videos.length;
+        document.getElementById('total-completions').textContent = totalCompletions;
+        document.getElementById('active-users').textContent = activeUsers;
+
+        console.log('📊 Estatísticas:', {
+            totalUsers: users.length,
+            totalVideos: videos.length,
+            totalCompletions: totalCompletions,
+            activeUsers: activeUsers
+        });
+
+        await loadUserDetailsTable(users, videos.length, allProgress, activityMap);
+        await loadProgressChart(users, videos.length, allProgress);
+        await loadLevelDistributionChart(users);
+
+        console.log('✅ Dashboard carregado com sucesso!');
+
+    } catch (error) {
+        console.error('❌ Erro ao carregar dashboard:', error);
+        alert('Erro ao carregar o dashboard. Verifique o console para mais detalhes.');
+    }
+}
+
+async function loadProgressChart(users, totalVideos, allProgress) {
+    const container = document.getElementById('user-progress-chart');
+
+    const userProgressData = users.map(user => {
+        const completedCount = allProgress.filter(p => p.user_id === user.id && p.completed).length;
+        const progressPercent = totalVideos > 0 ? Math.round((completedCount / totalVideos) * 100) : 0;
+        return {
+            name: user.full_name || user.name || `Usuário ${user.id.substring(0, 8)}`,
+            progress: progressPercent,
+            completed: completedCount
+        };
+    }).sort((a, b) => b.progress - a.progress).slice(0, 10);
+
+    let chartHTML = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+
+    userProgressData.forEach((user, index) => {
+        chartHTML += `
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="min-width: 30px; font-weight: 700; color: var(--primary);">#${index + 1}</div>
+                <div style="flex: 1;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span style="font-weight: 600; color: var(--text-dark);">${user.name}</span>
+                        <span style="font-weight: 700; color: var(--primary);">${user.progress}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${user.progress}%"></div>
+                    </div>
+                    <small style="color: var(--text-gray); margin-top: 3px; display: block;">
+                        ${user.completed} vídeos concluídos
+                    </small>
+                </div>
+            </div>
+        `;
+    });
+
+    chartHTML += '</div>';
+    container.innerHTML = chartHTML;
+}
+
+async function loadUserDetailsTable(users, totalVideos, allProgress, activityMap) {
+    const container = document.getElementById('users-table');
+
+    const { data: accessData } = await supabase
+        .from('user_access')
+        .select('user_id, access_level_id, access_levels(name)');
+
+    const accessMap = {};
+    if (accessData) {
+        accessData.forEach(a => {
+            accessMap[a.user_id] = {
+                level_id: a.access_level_id,
+                level_name: a.access_levels?.name || 'Desconhecido'
+            };
+        });
+    }
+
+    let tableHTML = `
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Usuário</th>
+                    <th>Nível</th>
+                    <th>Progresso</th>
+                    <th>Vídeos Concluídos</th>
+                    <th>Último Acesso</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    for (const user of users) {
+        const userName = user.full_name || user.name || `Usuário ${user.id.substring(0, 8)}`;
+        const userProgress = allProgress.filter(p => p.user_id === user.id && p.completed);
+        const completedCount = userProgress.length;
+        const progressPercent = totalVideos > 0 ? Math.round((completedCount / totalVideos) * 100) : 0;
+
+        const accessInfo = accessMap[user.id] || { level_id: 0, level_name: 'Sem acesso' };
+        let levelClass = '';
+        if (accessInfo.level_id === 1) levelClass = 'level-psicologos';
+        else if (accessInfo.level_id === 2) levelClass = 'level-admin';
+        else if (accessInfo.level_id === 3) levelClass = 'level-dev';
+
+        let lastLogin = 'Nunca';
+        if (activityMap[user.id]) {
+            const loginDate = new Date(activityMap[user.id]);
+            lastLogin = loginDate.toLocaleString('pt-BR', {
+                day: '2-digit',
+                month: '2-digit',
+                year: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+        }
+
+        tableHTML += `
+            <tr>
+                <td><strong>${userName}</strong></td>
+                <td><span class="user-level-badge ${levelClass}">${accessInfo.level_name}</span></td>
+                <td>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${progressPercent}%"></div>
+                    </div>
+                    <small style="color: var(--text-gray); margin-top: 5px; display: block;">${progressPercent}%</small>
+                </td>
+                <td><strong>${completedCount}</strong> / ${totalVideos}</td>
+                <td>
+                    <div class="last-login">
+                        <i class="fa-solid fa-clock"></i>
+                        ${lastLogin}
+                    </div>
+                </td>
+            </tr>
+        `;
+    }
+
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = tableHTML;
+}
+
+async function loadProgressChart(users, totalVideos, allProgress) {
+    const container = document.getElementById('user-progress-chart');
+
+    const userProgressData = users.map(user => {
+        const completedCount = allProgress.filter(p => p.user_id === user.id && p.completed).length;
+        const progressPercent = totalVideos > 0 ? Math.round((completedCount / totalVideos) * 100) : 0;
+        return {
+            name: user.full_name || user.name || `Usuário ${user.id.substring(0, 8)}`,
+            progress: progressPercent,
+            completed: completedCount
+        };
+    }).sort((a, b) => b.progress - a.progress).slice(0, 10);
+
+    let chartHTML = '<div style="display: flex; flex-direction: column; gap: 15px;">';
+
+    userProgressData.forEach((user, index) => {
+        chartHTML += `
+            <div style="display: flex; align-items: center; gap: 15px;">
+                <div style="min-width: 30px; font-weight: 700; color: var(--primary);">#${index + 1}</div>
+                <div style="flex: 1;">
+                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                        <span style="font-weight: 600; color: var(--text-dark);">${user.name}</span>
+                        <span style="font-weight: 700; color: var(--primary);">${user.progress}%</span>
+                    </div>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${user.progress}%"></div>
+                    </div>
+                    <small style="color: var(--text-gray); margin-top: 3px; display: block;">
+                        ${user.completed} vídeos concluídos
+                    </small>
+                </div>
+            </div>
+        `;
+    });
+
+    chartHTML += '</div>';
+    container.innerHTML = chartHTML;
+}
+
+async function loadLevelDistributionChart(users) {
+    const container = document.getElementById('level-distribution-chart');
+
+    const { data: accessData } = await supabase
+        .from('user_access')
+        .select('access_level_id, access_levels(name)');
+
+    const levelCounts = {
+        1: { name: 'Psicólogos', count: 0, color: '#6B9B7C' },
+        2: { name: 'Administrativo', count: 0, color: '#3498db' },
+        3: { name: 'Desenvolvedores', count: 0, color: '#9b59b6' }
+    };
+
+    if (accessData) {
+        accessData.forEach(a => {
+            if (levelCounts[a.access_level_id]) {
+                levelCounts[a.access_level_id].count++;
+            }
+        });
+    }
+
+    const total = Object.values(levelCounts).reduce((sum, level) => sum + level.count, 0);
+
+    let chartHTML = '<div style="display: flex; flex-direction: column; gap: 20px;">';
+
+    Object.values(levelCounts).forEach(level => {
+        const percent = total > 0 ? Math.round((level.count / total) * 100) : 0;
+        chartHTML += `
+            <div>
+                <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                    <span style="font-weight: 600; color: var(--text-dark);">${level.name}</span>
+                    <span style="font-weight: 700; color: ${level.color};">${level.count} usuários (${percent}%)</span>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" style="width: ${percent}%; background: ${level.color};"></div>
+                </div>
+            </div>
+        `;
+    });
+
+    chartHTML += '</div>';
+    container.innerHTML = chartHTML;
+}
+
 function initAntiInspect() {
     const REDIRECT_URL = 'https://www.psiquebrasilia.com.br'
     let devToolsOpen = false;
@@ -1370,7 +1700,7 @@ function initAntiInspect() {
     setInterval(detectDevTools, 500);
 }
 
-initAntiInspect();
+// initAntiInspect();
 
 const style = document.createElement('style');
 style.textContent = `

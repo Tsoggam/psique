@@ -2951,6 +2951,188 @@ body {
     }
 }
 
+.admin-stats-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.stat-card {
+    background: var(--white);
+    padding: var(--spacing-lg);
+    border-radius: 20px;
+    box-shadow: 0 8px 25px var(--shadow);
+    border: 1px solid var(--border);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-md);
+    transition: all 0.3s;
+}
+
+.stat-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 12px 35px var(--shadow);
+}
+
+.stat-icon {
+    width: 60px;
+    height: 60px;
+    border-radius: 15px;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-size: 28px;
+    flex-shrink: 0;
+}
+
+.stat-info h3 {
+    font-size: clamp(28px, 4vw, 36px);
+    font-weight: 700;
+    color: var(--text-dark);
+    margin: 0 0 5px 0;
+}
+
+.stat-info p {
+    font-size: var(--font-small);
+    color: var(--text-gray);
+    margin: 0;
+    font-weight: 600;
+}
+
+.admin-charts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+    gap: var(--spacing-lg);
+    margin-bottom: var(--spacing-xl);
+}
+
+.chart-card {
+    background: var(--white);
+    padding: var(--spacing-lg);
+    border-radius: 20px;
+    box-shadow: 0 8px 25px var(--shadow);
+    border: 1px solid var(--border);
+}
+
+.chart-card.full-width {
+    grid-column: 1 / -1;
+}
+
+.chart-card h3 {
+    font-size: var(--font-large);
+    color: var(--text-dark);
+    margin-bottom: var(--spacing-lg);
+    display: flex;
+    align-items: center;
+    gap: var(--spacing-sm);
+}
+
+.chart-card h3 i {
+    color: var(--primary);
+}
+
+.chart-container {
+    min-height: 300px;
+}
+
+.users-table-container {
+    overflow-x: auto;
+    border-radius: 12px;
+    border: 1px solid var(--border);
+}
+
+.users-table {
+    width: 100%;
+    border-collapse: collapse;
+    background: var(--bg-lighter);
+}
+
+.users-table thead {
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    color: white;
+}
+
+.users-table th,
+.users-table td {
+    padding: var(--spacing-md);
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+}
+
+.users-table th {
+    font-weight: 700;
+    font-size: var(--font-small);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+.users-table td {
+    font-size: var(--font-small);
+}
+
+.users-table tbody tr {
+    transition: background 0.3s;
+}
+
+.users-table tbody tr:hover {
+    background: var(--white);
+}
+
+.progress-bar {
+    height: 8px;
+    background: var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    position: relative;
+    min-width: 100px;
+}
+
+.progress-fill {
+    height: 100%;
+    background: linear-gradient(135deg, var(--primary) 0%, var(--primary-dark) 100%);
+    border-radius: 10px;
+    transition: width 0.5s;
+}
+
+.user-level-badge {
+    display: inline-block;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 700;
+    text-transform: uppercase;
+}
+
+.level-psicologos {
+    background: linear-gradient(135deg, #6B9B7C 0%, #5a8a6c 100%);
+    color: white;
+}
+
+.level-admin {
+    background: linear-gradient(135deg, #3498db 0%, #2980b9 100%);
+    color: white;
+}
+
+.level-dev {
+    background: linear-gradient(135deg, #9b59b6 0%, #8e44ad 100%);
+    color: white;
+}
+
+.last-login {
+    font-size: 12px;
+    color: var(--text-gray);
+    display: flex;
+    align-items: center;
+    gap: 5px;
+}
+
+.last-login i {
+    color: var(--primary);
+}
+
 @media print {
     @page {
         margin: 2cm;
@@ -2973,4 +3155,5 @@ body {
         border: 1px solid #000 !important;
         margin-bottom: 1cm;
     }
+
 }
