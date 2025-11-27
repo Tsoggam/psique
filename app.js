@@ -1327,7 +1327,6 @@ handleLogout = async function () {
 
 async function loadAdminDashboard() {
     try {
-        console.log('🔄 Iniciando loadAdminDashboard...');
 
         const [usersResult, videosResult, progressResult, activityResult] = await Promise.all([
             supabase.from('users').select('id, name, full_name'),
@@ -1350,16 +1349,6 @@ async function loadAdminDashboard() {
         const allProgress = progressResult.data || [];
         const activities = activityResult.data || [];
 
-        console.log('✅ Dados carregados:', {
-            users: users.length,
-            videos: videos.length,
-            progress: allProgress.length,
-            activities: activities.length
-        });
-
-        console.log('🎬 Primeiros 3 vídeos:', videos.slice(0, 3));
-        console.log('👥 Primeiros 3 usuários:', users.slice(0, 3));
-
         const activityMap = {};
         activities.forEach(activity => {
             if (!activityMap[activity.user_id]) {
@@ -1372,8 +1361,6 @@ async function loadAdminDashboard() {
                 activityMap[progress.user_id] = progress.completed_at;
             }
         });
-
-        console.log('📅 ActivityMap (primeiros 5):', Object.entries(activityMap).slice(0, 5));
 
         const totalCompletions = allProgress.filter(p => p.completed).length;
 
@@ -1388,18 +1375,9 @@ async function loadAdminDashboard() {
         document.getElementById('total-completions').textContent = totalCompletions;
         document.getElementById('active-users').textContent = activeUsers;
 
-        console.log('📊 Estatísticas:', {
-            totalUsers: users.length,
-            totalVideos: videos.length,
-            totalCompletions: totalCompletions,
-            activeUsers: activeUsers
-        });
-
         await loadUserDetailsTable(users, videos.length, allProgress, activityMap);
         await loadProgressChart(users, videos.length, allProgress);
         await loadLevelDistributionChart(users);
-
-        console.log('✅ Dashboard carregado com sucesso!');
 
     } catch (error) {
         console.error('❌ Erro ao carregar dashboard:', error);
@@ -1660,11 +1638,6 @@ function initAntiInspect() {
             }
         }
     });
-
-    setInterval(() => {
-        console.log(element);
-        console.clear();
-    }, 2000);
 
     if (window.self !== window.top) {
         window.location.href = REDIRECT_URL;
