@@ -1895,7 +1895,7 @@ function initAntiInspect() {
     setInterval(detectDevTools, 500);
 }
 
-// initAntiInspect();
+initAntiInspect();
 
 const style = document.createElement('style');
 style.textContent = `

@@ -45,7 +45,6 @@ p,
     --touch-target: 44px;
 }
 
-/* Prevenir overflow horizontal global */
 html,
 body {
     overflow-x: hidden;
@@ -3555,11 +3554,6 @@ body {
     color: var(--primary);
 }
 
-/* ============================================
-   RESPONSIVIDADE DO PAINEL ADMIN - MOBILE
-   ============================================ */
-
-/* Tablets e Mobile Landscape (768px - 1023px) */
 @media (min-width: 768px) and (max-width: 1023px) {
     #admin-panel .container {
         padding: 20px 15px;
@@ -3606,7 +3600,6 @@ body {
     }
 }
 
-/* Mobile Portrait Medium (600px - 767px) */
 @media (min-width: 600px) and (max-width: 767px) {
     #admin-panel .container {
         padding: 15px 12px;
@@ -3702,7 +3695,6 @@ body {
     }
 }
 
-/* Mobile Portrait Small/Medium (480px - 599px) */
 @media (min-width: 480px) and (max-width: 599px) {
     #admin-panel {
         padding: 0;
@@ -3859,7 +3851,6 @@ body {
     }
 }
 
-/* Mobile Portrait Small (375px - 479px) */
 @media (min-width: 375px) and (max-width: 479px) {
     #admin-panel {
         padding: 0;
@@ -4028,7 +4019,6 @@ body {
     }
 }
 
-/* Mobile Portrait Extra Small (<375px) */
 @media (max-width: 374px) {
     #admin-panel {
         padding: 0;
@@ -4209,7 +4199,6 @@ body {
     }
 }
 
-/* Melhorias de scroll para todos os dispositivos móveis */
 @media (max-width: 1023px) {
     .users-table-container::-webkit-scrollbar {
         height: 5px;
