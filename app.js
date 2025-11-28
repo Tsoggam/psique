@@ -831,14 +831,26 @@ function extractYouTubeId(url) {
     return (match && match[2].length === 11) ? match[2] : null;
 }
 
-function downloadFile(url, filename) {
-    const link = document.createElement('a');
-    link.href = url;
-    link.download = filename;
-    link.target = '_blank';
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
+async function downloadFile(url, filename) {
+    try {
+        const response = await fetch(url);
+        const blob = await response.blob();
+        const blobUrl = window.URL.createObjectURL(blob);
+
+        const link = document.createElement('a');
+        link.href = blobUrl;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
+
+        showToast('✅ Download iniciado!');
+    } catch (error) {
+        window.open(url, '_blank');
+        showToast('📥 Arquivo aberto em nova aba');
+    }
 }
 
 function getFileIcon(filename) {
@@ -1883,7 +1895,7 @@ function initAntiInspect() {
     setInterval(detectDevTools, 500);
 }
 
-initAntiInspect();
+// initAntiInspect();
 
 const style = document.createElement('style');
 style.textContent = `
