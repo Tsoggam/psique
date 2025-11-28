@@ -12,6 +12,11 @@ let isLoadingFiles = false;
 let isSendingMessage = false;
 let isLoadingChat = false;
 let subscribeTimeout = null;
+let currentFilter = 'default';
+let usersData = [];
+let currentFolder = null;
+let allFolders = [];
+let allFiles = [];
 
 const themeToggle = document.getElementById('theme-toggle');
 const savedTheme = localStorage.getItem('theme') || 'light';
@@ -42,6 +47,8 @@ document.getElementById('logout-btn').addEventListener('click', handleLogout);
 document.getElementById('close-modal-btn').addEventListener('click', closeVideoModal);
 document.getElementById('mark-complete-btn').addEventListener('click', markVideoComplete);
 document.getElementById('next-video-btn').addEventListener('click', playNextVideo);
+document.getElementById('close-folder-btn')?.addEventListener('click', closeFolderModal);
+document.querySelector('#folder-modal .modal-backdrop')?.addEventListener('click', closeFolderModal);
 
 document.querySelectorAll('.tab').forEach(tab => {
     tab.addEventListener('click', (e) => {
@@ -411,7 +418,6 @@ function organizeVideoHierarchy(videos) {
 }
 
 async function loadFiles() {
-
     if (isLoadingFiles) {
         return;
     }
@@ -439,7 +445,18 @@ async function loadFiles() {
 
         const accessLevelIds = userAccess.map(a => a.access_level_id);
 
-        const { data: files, error } = await supabase
+        const { data: folders, error: foldersError } = await supabase
+            .from('folders')
+            .select(`
+                *,
+                access_levels (name)
+            `)
+            .in('access_level_id', accessLevelIds)
+            .order('created_at', { ascending: false });
+
+        if (foldersError) throw foldersError;
+
+        const { data: files, error: filesError } = await supabase
             .from('files')
             .select(`
                 *,
@@ -448,19 +465,33 @@ async function loadFiles() {
             .in('access_level_id', accessLevelIds)
             .order('created_at', { ascending: false });
 
-        if (error) throw error;
+        if (filesError) throw filesError;
 
         loading.style.display = 'none';
 
-        if (!files || files.length === 0) {
+        allFolders = folders || [];
+        allFiles = files || [];
+
+        if (allFolders.length > 0) {
+            allFolders.forEach(folder => {
+                const card = createFolderCard(folder);
+                container.appendChild(card);
+            });
+        }
+
+        const standaloneFiles = allFiles.filter(f => !f.folder_id);
+
+        if (standaloneFiles.length > 0) {
+            standaloneFiles.forEach(file => {
+                const card = createFileCard(file);
+                container.appendChild(card);
+            });
+        }
+
+        if (allFolders.length === 0 && standaloneFiles.length === 0) {
             noFiles.style.display = 'block';
             return;
         }
-
-        files.forEach(file => {
-            const card = createFileCard(file);
-            container.appendChild(card);
-        });
 
         const savedView = localStorage.getItem('viewMode') || 'grid';
         if (savedView === 'list') {
@@ -1379,6 +1410,8 @@ async function loadAdminDashboard() {
         await loadProgressChart(users, videos.length, allProgress);
         await loadLevelDistributionChart(users);
 
+        setupFilterDropdown();
+
     } catch (error) {
         console.error('❌ Erro ao carregar dashboard:', error);
         alert('Erro ao carregar o dashboard. Verifique o console para mais detalhes.');
@@ -1425,8 +1458,6 @@ async function loadProgressChart(users, totalVideos, allProgress) {
 }
 
 async function loadUserDetailsTable(users, totalVideos, allProgress, activityMap) {
-    const container = document.getElementById('users-table');
-
     const { data: accessData } = await supabase
         .from('user_access')
         .select('user_id, access_level_id, access_levels(name)');
@@ -1441,35 +1472,18 @@ async function loadUserDetailsTable(users, totalVideos, allProgress, activityMap
         });
     }
 
-    let tableHTML = `
-        <table class="users-table">
-            <thead>
-                <tr>
-                    <th>Usuário</th>
-                    <th>Nível</th>
-                    <th>Progresso</th>
-                    <th>Vídeos Concluídos</th>
-                    <th>Último Acesso</th>
-                </tr>
-            </thead>
-            <tbody>
-    `;
-
-    for (const user of users) {
+    usersData = users.map(user => {
         const userName = user.full_name || user.name || `Usuário ${user.id.substring(0, 8)}`;
         const userProgress = allProgress.filter(p => p.user_id === user.id && p.completed);
         const completedCount = userProgress.length;
         const progressPercent = totalVideos > 0 ? Math.round((completedCount / totalVideos) * 100) : 0;
-
         const accessInfo = accessMap[user.id] || { level_id: 0, level_name: 'Sem acesso' };
-        let levelClass = '';
-        if (accessInfo.level_id === 1) levelClass = 'level-psicologos';
-        else if (accessInfo.level_id === 2) levelClass = 'level-admin';
-        else if (accessInfo.level_id === 3) levelClass = 'level-dev';
 
         let lastLogin = 'Nunca';
+        let lastLoginRaw = null;
         if (activityMap[user.id]) {
-            const loginDate = new Date(activityMap[user.id]);
+            lastLoginRaw = activityMap[user.id];
+            const loginDate = new Date(lastLoginRaw);
             lastLogin = loginDate.toLocaleString('pt-BR', {
                 day: '2-digit',
                 month: '2-digit',
@@ -1479,33 +1493,18 @@ async function loadUserDetailsTable(users, totalVideos, allProgress, activityMap
             });
         }
 
-        tableHTML += `
-            <tr>
-                <td><strong>${userName}</strong></td>
-                <td><span class="user-level-badge ${levelClass}">${accessInfo.level_name}</span></td>
-                <td>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${progressPercent}%"></div>
-                    </div>
-                    <small style="color: var(--text-gray); margin-top: 5px; display: block;">${progressPercent}%</small>
-                </td>
-                <td><strong>${completedCount}</strong> / ${totalVideos}</td>
-                <td>
-                    <div class="last-login">
-                        <i class="fa-solid fa-clock"></i>
-                        ${lastLogin}
-                    </div>
-                </td>
-            </tr>
-        `;
-    }
+        return {
+            userName,
+            accessInfo,
+            progressPercent,
+            completedCount,
+            totalVideos,
+            lastLogin,
+            lastLoginRaw
+        };
+    });
 
-    tableHTML += `
-            </tbody>
-        </table>
-    `;
-
-    container.innerHTML = tableHTML;
+    renderUsersTable(usersData);
 }
 
 async function loadProgressChart(users, totalVideos, allProgress) {
@@ -1589,6 +1588,217 @@ async function loadLevelDistributionChart(users) {
 
     chartHTML += '</div>';
     container.innerHTML = chartHTML;
+}
+
+function setupFilterDropdown() {
+    const filterBtn = document.getElementById('filter-btn');
+    const filterMenu = document.getElementById('filter-menu');
+    const filterOptions = document.querySelectorAll('.filter-option');
+
+    if (!filterBtn || !filterMenu) return;
+
+    filterBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        filterMenu.classList.toggle('active');
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!filterMenu.contains(e.target) && e.target !== filterBtn) {
+            filterMenu.classList.remove('active');
+        }
+    });
+
+    filterOptions.forEach(option => {
+        option.addEventListener('click', () => {
+            const filter = option.dataset.filter;
+            currentFilter = filter;
+
+            filterOptions.forEach(opt => opt.classList.remove('active'));
+            option.classList.add('active');
+
+            applyFilter(filter);
+            filterMenu.classList.remove('active');
+        });
+    });
+}
+
+function applyFilter(filter) {
+    let sortedUsers = [...usersData];
+
+    switch (filter) {
+        case 'level':
+            sortedUsers.sort((a, b) => a.accessInfo.level_id - b.accessInfo.level_id);
+            break;
+        case 'recent':
+            sortedUsers.sort((a, b) => {
+                const dateA = a.lastLogin === 'Nunca' ? new Date(0) : new Date(a.lastLoginRaw);
+                const dateB = b.lastLogin === 'Nunca' ? new Date(0) : new Date(b.lastLoginRaw);
+                return dateB - dateA;
+            });
+            break;
+        case 'alphabetical':
+            sortedUsers.sort((a, b) => a.userName.localeCompare(b.userName));
+            break;
+        case 'completed':
+            sortedUsers.sort((a, b) => b.completedCount - a.completedCount);
+            break;
+        default:
+            break;
+    }
+
+    renderUsersTable(sortedUsers);
+}
+
+function renderUsersTable(users) {
+    const container = document.getElementById('users-table');
+
+    let tableHTML = `
+        <table class="users-table">
+            <thead>
+                <tr>
+                    <th>Usuário</th>
+                    <th>Nível</th>
+                    <th>Progresso</th>
+                    <th>Vídeos Concluídos</th>
+                    <th>Último Acesso</th>
+                </tr>
+            </thead>
+            <tbody>
+    `;
+
+    users.forEach(user => {
+        let levelClass = '';
+        if (user.accessInfo.level_id === 1) levelClass = 'level-psicologos';
+        else if (user.accessInfo.level_id === 2) levelClass = 'level-admin';
+        else if (user.accessInfo.level_id === 3) levelClass = 'level-dev';
+
+        tableHTML += `
+            <tr>
+                <td><strong>${user.userName}</strong></td>
+                <td><span class="user-level-badge ${levelClass}">${user.accessInfo.level_name}</span></td>
+                <td>
+                    <div class="progress-bar">
+                        <div class="progress-fill" style="width: ${user.progressPercent}%"></div>
+                    </div>
+                    <small style="color: var(--text-gray); margin-top: 5px; display: block;">${user.progressPercent}%</small>
+                </td>
+                <td><strong>${user.completedCount}</strong> / ${user.totalVideos}</td>
+                <td>
+                    <div class="last-login">
+                        <i class="fa-solid fa-clock"></i>
+                        ${user.lastLogin}
+                    </div>
+                </td>
+            </tr>
+        `;
+    });
+
+    tableHTML += `
+            </tbody>
+        </table>
+    `;
+
+    container.innerHTML = tableHTML;
+}
+
+function createFolderCard(folder) {
+    const card = document.createElement('div');
+    card.className = 'folder-card';
+
+    const filesCount = allFiles.filter(f => f.folder_id === folder.id).length;
+
+    card.innerHTML = `
+        <div class="folder-icon">
+            <i class="fa-solid fa-folder"></i>
+        </div>
+        <h3>${folder.name}</h3>
+        <p>${folder.description || 'Sem descrição'}</p>
+        <div class="folder-files-count">
+            <i class="fa-solid fa-file"></i>
+            <span>${filesCount} ${filesCount === 1 ? 'arquivo' : 'arquivos'}</span>
+        </div>
+    `;
+
+    let clickTimeout;
+    card.addEventListener('click', () => {
+        if (clickTimeout) {
+            clearTimeout(clickTimeout);
+            clickTimeout = null;
+            openFolderModal(folder);
+        } else {
+            clickTimeout = setTimeout(() => {
+                clickTimeout = null;
+            }, 300);
+        }
+    });
+
+    return card;
+}
+
+async function openFolderModal(folder) {
+    currentFolder = folder;
+    const modal = document.getElementById('folder-modal');
+    const loading = document.getElementById('folder-files-loading');
+    const container = document.getElementById('folder-files-container');
+    const noFiles = document.getElementById('folder-no-files');
+
+    document.getElementById('folder-modal-title').textContent = folder.name;
+    document.getElementById('folder-modal-description').textContent = folder.description || 'Sem descrição';
+
+    loading.style.display = 'block';
+    container.innerHTML = '';
+    noFiles.style.display = 'none';
+
+    modal.classList.add('active');
+    document.body.style.overflow = 'hidden';
+
+    try {
+        const folderFiles = allFiles.filter(f => f.folder_id === folder.id);
+
+        loading.style.display = 'none';
+
+        if (folderFiles.length === 0) {
+            noFiles.style.display = 'block';
+            return;
+        }
+
+        folderFiles.forEach(file => {
+            const fileCard = createFolderFileCard(file);
+            container.appendChild(fileCard);
+        });
+
+    } catch (error) {
+        console.error('Erro ao carregar arquivos da pasta:', error);
+        loading.style.display = 'none';
+        container.innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Erro ao carregar arquivos</p></div>';
+    }
+}
+
+function createFolderFileCard(file) {
+    const card = document.createElement('div');
+    card.className = 'folder-file-card';
+
+    const icon = getFileIcon(file.name);
+
+    card.innerHTML = `
+        <div class="folder-file-icon">${icon}</div>
+        <div class="folder-file-info">
+            <h4>${file.name}</h4>
+            ${file.description ? `<p>${file.description}</p>` : ''}
+        </div>
+        <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn-download-small" title="Baixar arquivo">
+            <i class="fa-solid fa-download"></i>
+        </button>
+    `;
+
+    return card;
+}
+
+function closeFolderModal() {
+    const modal = document.getElementById('folder-modal');
+    modal.classList.remove('active');
+    document.body.style.overflow = 'auto';
+    currentFolder = null;
 }
 
 function initAntiInspect() {

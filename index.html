@@ -69,7 +69,7 @@
         <div id="admin-panel" style="display: none;">
             <div class="container">
                 <div class="welcome-section">
-                    <h1><i class="fa-solid fa-terminal"></i> PAINEL</h1>
+                    <h1><i class="fa-brands fa-pagelines fa-beat" style="color: #6b9b7c;"></i> PAINEL</h1>
                 </div>
 
                 <div class="admin-stats-grid">
@@ -127,7 +127,37 @@
                 </div>
 
                 <div class="chart-card full-width">
-                    <h3><i class="fa-solid fa-table"></i> Detalhes dos Usuários</h3>
+                    <div class="table-header">
+                        <h3><i class="fa-solid fa-table"></i> Detalhes dos Usuários</h3>
+                        <div class="filter-dropdown">
+                            <button class="filter-btn" id="filter-btn">
+                                <i class="fa-solid fa-arrow-down-short-wide"></i>
+                                <span>Filtrar</span>
+                            </button>
+                            <div class="filter-menu" id="filter-menu">
+                                <button class="filter-option" data-filter="default">
+                                    <i class="fa-solid fa-list"></i>
+                                    Padrão
+                                </button>
+                                <button class="filter-option" data-filter="level">
+                                    <i class="fa-solid fa-layer-group"></i>
+                                    Por Nível
+                                </button>
+                                <button class="filter-option" data-filter="recent">
+                                    <i class="fa-solid fa-clock"></i>
+                                    Acesso Recente
+                                </button>
+                                <button class="filter-option" data-filter="alphabetical">
+                                    <i class="fa-solid fa-arrow-down-a-z"></i>
+                                    Ordem Alfabética
+                                </button>
+                                <button class="filter-option" data-filter="completed">
+                                    <i class="fa-solid fa-trophy"></i>
+                                    Mais Vídeos Concluídos
+                                </button>
+                            </div>
+                        </div>
+                    </div>
                     <div id="users-table" class="users-table-container"></div>
                 </div>
             </div>
@@ -257,6 +287,40 @@
                         </div>
                     </div>
                     <div class="playlist-items" id="playlist-items"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="folder-modal" class="modal">
+        <div class="modal-backdrop"></div>
+        <div class="folder-modal-content">
+            <button class="close-modal" id="close-folder-btn">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="18" y1="6" x2="6" y2="18"></line>
+                    <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+            </button>
+
+            <div class="folder-modal-header">
+                <div class="folder-modal-icon">
+                    <i class="fa-solid fa-folder-open"></i>
+                </div>
+                <div class="folder-modal-info">
+                    <h2 id="folder-modal-title">Nome da Pasta</h2>
+                    <p id="folder-modal-description">Descrição da pasta</p>
+                </div>
+            </div>
+
+            <div class="folder-modal-body">
+                <div id="folder-files-loading" class="loading" style="display: none;">
+                    <div class="spinner"></div>
+                    <p>Carregando arquivos...</p>
+                </div>
+                <div id="folder-files-container" class="folder-files-grid"></div>
+                <div id="folder-no-files" class="empty-state" style="display: none;">
+                    <i class="fa-solid fa-folder-open empty-icon"></i>
+                    <p>Nenhum arquivo nesta pasta</p>
                 </div>
             </div>
         </div>
