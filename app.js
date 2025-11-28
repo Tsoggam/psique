@@ -1731,17 +1731,8 @@ function createFolderCard(folder) {
         </div>
     `;
 
-    let clickTimeout;
     card.addEventListener('click', () => {
-        if (clickTimeout) {
-            clearTimeout(clickTimeout);
-            clickTimeout = null;
-            openFolderModal(folder);
-        } else {
-            clickTimeout = setTimeout(() => {
-                clickTimeout = null;
-            }, 300);
-        }
+        openFolderModal(folder);
     });
 
     return card;
