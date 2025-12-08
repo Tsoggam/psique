@@ -1116,6 +1116,27 @@ body {
     position: relative;
 }
 
+.sub-videos-count {
+    position: absolute;
+    bottom: var(--spacing-md);
+    right: var(--spacing-md);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    background: rgba(107, 155, 124, 0.95);
+    color: white;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 600;
+    z-index: 2;
+    box-shadow: 0 4px 12px rgba(107, 155, 124, 0.3);
+}
+
+.sub-videos-count i {
+    font-size: 14px;
+}
+
 .video-player iframe,
 .video-player video {
     width: 100%;

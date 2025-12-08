@@ -366,13 +366,9 @@ async function loadVideos() {
             const isUnlocked = mainVideo.unlocked === true || flatIndex === 0;
             const isLocked = !isUnlocked && flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
 
-            const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false);
+            const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false, videoGroup.children.length);
             container.appendChild(card);
             flatIndex++;
-
-            if (videoGroup.children && videoGroup.children.length > 0) {
-                flatIndex += videoGroup.children.length;
-            }
         });
 
         const savedView = localStorage.getItem('viewMode') || 'grid';
@@ -507,7 +503,7 @@ async function loadFiles() {
     }
 }
 
-function createVideoCard(video, index, isCompleted, isLocked, isSubVideo) {
+function createVideoCard(video, index, isCompleted, isLocked, isSubVideo, subVideosCount = 0) {
     const defaultThumbnail = "https://hjeivflwulqtlkwvvmvw.supabase.co/storage/v1/object/public/thumbnail/Thumbnail.png";
 
     const card = document.createElement('div');
@@ -528,6 +524,13 @@ function createVideoCard(video, index, isCompleted, isLocked, isSubVideo) {
 
     card.innerHTML = `
         <span class="section-badge">${sectionNumber}</span>
+
+        ${subVideosCount > 0 ? `
+    <div class="sub-videos-count">
+        <i class="fa-solid fa-layer-group"></i>
+        <span>${subVideosCount} ${subVideosCount === 1 ? 'vídeo' : 'vídeos'}</span>
+    </div>
+` : ''}
         
         <div class="video-thumbnail">
             <img src="${video.thumbnail_url || defaultThumbnail}" alt="${video.title}">
@@ -581,26 +584,54 @@ function createPlaylist() {
     document.getElementById('playlist-progress-text').textContent =
         `${completedCount} de ${allVideos.length} concluídas`;
 
-    allVideos.forEach((video, index) => {
-        const isCompleted = completedVideoIds.includes(video.id);
-        const isLocked = index > 0 && !completedVideoIds.includes(allVideos[index - 1].id);
-        const isActive = index === currentVideoIndex;
-        const isSubVideo = video.parent_video_id !== null;
+    const videoHierarchy = organizeVideoHierarchy(allVideos);
 
-        const item = document.createElement('div');
-        item.className = 'playlist-item';
-        item.setAttribute('role', 'button');
-        item.setAttribute('tabindex', isLocked ? '-1' : '0');
+    let flatIndex = 0;
 
-        if (isCompleted) item.classList.add('completed');
-        if (isLocked) item.classList.add('locked');
-        if (isActive) item.classList.add('active');
-        if (isSubVideo) item.classList.add('sub-video');
+    videoHierarchy.forEach(videoGroup => {
+        const mainVideo = videoGroup.main;
 
-        const statusText = isLocked ? 'Bloqueado' : isCompleted ? 'Concluído' : 'Não iniciado';
-        const sectionNumber = video.section_number || (index + 1);
+        if (mainVideo.parent_video_id) {
+            return;
+        }
 
-        item.innerHTML = `
+        const isCompleted = completedVideoIds.includes(mainVideo.id);
+        const isLocked = flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+        const isActive = flatIndex === currentVideoIndex;
+
+        const item = createPlaylistItem(mainVideo, flatIndex, isCompleted, isLocked, isActive, false);
+        playlistContainer.appendChild(item);
+        flatIndex++;
+
+        if (videoGroup.children && videoGroup.children.length > 0) {
+            videoGroup.children.forEach((subVideo, subIndex) => {
+                const subCompleted = completedVideoIds.includes(subVideo.id);
+                const subLocked = !completedVideoIds.includes(mainVideo.id);
+                const subActive = flatIndex === currentVideoIndex;
+
+                const subItem = createPlaylistItem(subVideo, flatIndex, subCompleted, subLocked, subActive, true);
+                playlistContainer.appendChild(subItem);
+                flatIndex++;
+            });
+        }
+    });
+}
+
+function createPlaylistItem(video, index, isCompleted, isLocked, isActive, isSubVideo) {
+    const item = document.createElement('div');
+    item.className = 'playlist-item';
+    item.setAttribute('role', 'button');
+    item.setAttribute('tabindex', isLocked ? '-1' : '0');
+
+    if (isCompleted) item.classList.add('completed');
+    if (isLocked) item.classList.add('locked');
+    if (isActive) item.classList.add('active');
+    if (isSubVideo) item.classList.add('sub-video');
+
+    const statusText = isLocked ? 'Bloqueado' : isCompleted ? 'Concluído' : 'Não iniciado';
+    const sectionNumber = video.section_number || (index + 1);
+
+    item.innerHTML = `
         <div class="playlist-item-number">${!isLocked && !isCompleted ? sectionNumber : ''}</div>
         <div class="playlist-item-info">
             <div class="playlist-item-title">${video.title}</div>
@@ -608,19 +639,18 @@ function createPlaylist() {
         </div>
     `;
 
-        if (!isLocked) {
-            item.onclick = () => {
+    if (!isLocked) {
+        item.onclick = () => {
+            openVideoModal(video, index);
+        };
+        item.onkeypress = (e) => {
+            if (e.key === 'Enter' || e.key === ' ') {
                 openVideoModal(video, index);
-            };
-            item.onkeypress = (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    openVideoModal(video, index);
-                }
-            };
-        }
+            }
+        };
+    }
 
-        playlistContainer.appendChild(item);
-    });
+    return item;
 }
 
 async function openVideoModal(video, index) {
