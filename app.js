@@ -1916,6 +1916,70 @@ function initAntiInspect() {
     setInterval(detectDevTools, 500);
 }
 
+document.getElementById('files-search')?.addEventListener('input', handleFilesSearch);
+document.getElementById('clear-search')?.addEventListener('click', clearFilesSearch);
+
+function handleFilesSearch(e) {
+    const searchTerm = e.target.value.toLowerCase().trim();
+    const clearBtn = document.getElementById('clear-search');
+    const container = document.getElementById('files-container');
+    const noResults = document.getElementById('no-search-results');
+    const noFiles = document.getElementById('no-files');
+
+    if (searchTerm) {
+        clearBtn.style.display = 'flex';
+    } else {
+        clearBtn.style.display = 'none';
+        noResults.style.display = 'none';
+        noFiles.style.display = allFolders.length === 0 && allFiles.filter(f => !f.folder_id).length === 0 ? 'block' : 'none';
+        loadFiles();
+        return;
+    }
+
+    const filteredFolders = allFolders.filter(folder =>
+        folder.name.toLowerCase().includes(searchTerm) ||
+        (folder.description && folder.description.toLowerCase().includes(searchTerm))
+    );
+
+    const filteredFiles = allFiles.filter(file =>
+        !file.folder_id && (
+            file.name.toLowerCase().includes(searchTerm) ||
+            (file.description && file.description.toLowerCase().includes(searchTerm))
+        )
+    );
+
+    container.innerHTML = '';
+    noFiles.style.display = 'none';
+
+    if (filteredFolders.length === 0 && filteredFiles.length === 0) {
+        noResults.style.display = 'block';
+    } else {
+        noResults.style.display = 'none';
+
+        filteredFolders.forEach(folder => {
+            const card = createFolderCard(folder);
+            container.appendChild(card);
+        });
+
+        filteredFiles.forEach(file => {
+            const card = createFileCard(file);
+            container.appendChild(card);
+        });
+    }
+}
+
+function clearFilesSearch() {
+    const searchInput = document.getElementById('files-search');
+    const clearBtn = document.getElementById('clear-search');
+    const noResults = document.getElementById('no-search-results');
+
+    searchInput.value = '';
+    clearBtn.style.display = 'none';
+    noResults.style.display = 'none';
+
+    loadFiles();
+}
+
 initAntiInspect();
 
 const style = document.createElement('style');

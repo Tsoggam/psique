@@ -215,6 +215,21 @@
             </div>
 
             <div id="files-tab" class="tab-content">
+                <div class="search-container">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="files-search" placeholder="Buscar materiais, pastas ou arquivos..."
+                            autocomplete="off" />
+                        <button id="clear-search" class="clear-search-btn" style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                    </div>
+                </div>
+                <div id="no-search-results" class="empty-state" style="display: none;">
+                    <i class="fa-solid fa-magnifying-glass empty-icon"></i>
+                    <h3>Nenhum resultado encontrado</h3>
+                    <p>Tente buscar com outras palavras-chave</p>
+                </div>
                 <div id="files-loading" class="loading">
                     <div class="spinner"></div>
                     <p>Carregando materiais...</p>
