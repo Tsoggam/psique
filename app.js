@@ -355,7 +355,9 @@ async function loadVideos() {
         const videoHierarchy = organizeVideoHierarchy(videos);
 
         let flatIndex = 0;
-        videoHierarchy.forEach(videoGroup => {
+        let lastRequiredVideoId = null;
+
+        videoHierarchy.forEach((videoGroup, groupIndex) => {
             const mainVideo = videoGroup.main;
 
             if (mainVideo.parent_video_id) {
@@ -363,11 +365,20 @@ async function loadVideos() {
             }
 
             const isCompleted = completedVideoIds.includes(mainVideo.id);
-            const isUnlocked = mainVideo.unlocked === true || flatIndex === 0;
-            const isLocked = !isUnlocked && flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+            const isUnlocked = mainVideo.unlocked === true;
+
+            const isLocked = groupIndex > 0 &&
+                !isUnlocked &&
+                lastRequiredVideoId &&
+                !completedVideoIds.includes(lastRequiredVideoId);
 
             const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false, videoGroup.children.length);
             container.appendChild(card);
+
+            if (!isUnlocked) {
+                lastRequiredVideoId = mainVideo.id;
+            }
+
             flatIndex++;
         });
 
@@ -597,8 +608,9 @@ function createPlaylist() {
     const videoHierarchy = organizeVideoHierarchy(allVideos);
 
     let flatIndex = 0;
+    let lastRequiredVideoId = null;
 
-    videoHierarchy.forEach(videoGroup => {
+    videoHierarchy.forEach((videoGroup, groupIndex) => {
         const mainVideo = videoGroup.main;
 
         if (mainVideo.parent_video_id) {
@@ -606,7 +618,13 @@ function createPlaylist() {
         }
 
         const isCompleted = completedVideoIds.includes(mainVideo.id);
-        const isLocked = flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+        const isUnlocked = mainVideo.unlocked === true;
+
+        const isLocked = groupIndex > 0 &&
+            !isUnlocked &&
+            lastRequiredVideoId &&
+            !completedVideoIds.includes(lastRequiredVideoId);
+
         const isActive = flatIndex === currentVideoIndex;
 
         const item = createPlaylistItem(mainVideo, flatIndex, isCompleted, isLocked, isActive, false);
@@ -623,6 +641,10 @@ function createPlaylist() {
                 playlistContainer.appendChild(subItem);
                 flatIndex++;
             });
+        }
+
+        if (!isUnlocked) {
+            lastRequiredVideoId = mainVideo.id;
         }
     });
 }
