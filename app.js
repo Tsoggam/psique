@@ -389,7 +389,6 @@ function organizeVideoHierarchy(videos) {
     const hierarchy = [];
     const videoMap = new Map();
 
-    // Primeiro, ordenar todos os vídeos pelo order_index
     const sortedVideos = [...videos].sort((a, b) => a.order_index - b.order_index);
 
     sortedVideos.forEach(video => {
