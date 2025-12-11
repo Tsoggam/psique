@@ -389,11 +389,14 @@ function organizeVideoHierarchy(videos) {
     const hierarchy = [];
     const videoMap = new Map();
 
-    videos.forEach(video => {
+    // Primeiro, ordenar todos os vídeos pelo order_index
+    const sortedVideos = [...videos].sort((a, b) => a.order_index - b.order_index);
+
+    sortedVideos.forEach(video => {
         videoMap.set(video.id, { main: video, children: [] });
     });
 
-    videos.forEach(video => {
+    sortedVideos.forEach(video => {
         if (video.parent_video_id) {
             const parent = videoMap.get(video.parent_video_id);
             if (parent) {
@@ -406,7 +409,15 @@ function organizeVideoHierarchy(videos) {
 
     hierarchy.forEach(group => {
         if (group.children.length > 0) {
-            group.children.sort((a, b) => a.order_index - b.order_index);
+            group.children.sort((a, b) => {
+                if (a.order_index !== b.order_index) {
+                    return a.order_index - b.order_index;
+                }
+                if (a.section_number && b.section_number) {
+                    return parseFloat(a.section_number) - parseFloat(b.section_number);
+                }
+                return 0;
+            });
         }
     });
 
