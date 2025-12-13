@@ -465,11 +465,11 @@ async function loadFiles() {
         const { data: files, error: filesError } = await supabase
             .from('files')
             .select(`
-                *,
-                access_levels (name)
-            `)
+        *,
+        access_levels (name)
+    `)
             .in('access_level_id', accessLevelIds)
-            .order('created_at', { ascending: false });
+            .order('order_files', { ascending: true, nullsFirst: false });
 
         if (filesError) throw filesError;
 
