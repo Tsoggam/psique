@@ -977,31 +977,6 @@ function showToast(message) {
     }, 4000);
 }
 
-const originalShowMemberScreen = showMemberScreen;
-showMemberScreen = async function () {
-    await originalShowMemberScreen.call(this);
-
-    const chatBtn = document.getElementById('chat-toggle-btn');
-    const chatModal = document.getElementById('chat-modal');
-
-    if (!chatBtn) {
-        createChatElements();
-        await loadChatMessages();
-        subscribeToChatMessages();
-    } else {
-        chatBtn.style.display = 'flex';
-        if (chatModal) {
-            chatModal.style.display = 'none';
-            chatModal.classList.remove('active');
-        }
-        const badge = document.getElementById('chat-badge');
-        if (badge) {
-            badge.style.display = 'none';
-            badge.textContent = '0';
-        }
-    }
-};
-
 const originalConsoleError = console.error;
 console.error = function (...args) {
     const errorString = args.join(' ');
@@ -1017,24 +992,6 @@ console.error = function (...args) {
     }
 
     originalConsoleError.apply(console, args);
-};
-
-const originalHandleLogout = handleLogout;
-handleLogout = async function () {
-    if (chatSubscription) {
-        await supabase.removeChannel(chatSubscription);
-        chatSubscription = null;
-    }
-
-    const chatBtn = document.getElementById('chat-toggle-btn');
-    const chatModal = document.getElementById('chat-modal');
-    if (chatBtn) chatBtn.remove();
-    if (chatModal) chatModal.remove();
-
-    chatOpen = false;
-    chatMessages = [];
-
-    await originalHandleLogout.call(this);
 };
 
 async function loadAdminDashboard() {
