@@ -357,8 +357,7 @@ async function loadVideos() {
             }
 
             const isCompleted = completedVideoIds.includes(mainVideo.id);
-            const isUnlocked = mainVideo.unlocked === true || flatIndex === 0;
-            const isLocked = !isUnlocked && flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+            const isLocked = isVideoLocked(mainVideo, flatIndex);
 
             const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false, videoGroup.children.length);
             container.appendChild(card);
@@ -600,7 +599,7 @@ function createPlaylist() {
         }
 
         const isCompleted = completedVideoIds.includes(mainVideo.id);
-        const isLocked = flatIndex > 0 && !completedVideoIds.includes(allVideos[flatIndex - 1].id);
+        const isLocked = isVideoLocked(mainVideo, flatIndex);
         const isActive = flatIndex === currentVideoIndex;
 
         const item = createPlaylistItem(mainVideo, flatIndex, isCompleted, isLocked, isActive, false);
@@ -610,7 +609,7 @@ function createPlaylist() {
         if (videoGroup.children && videoGroup.children.length > 0) {
             videoGroup.children.forEach((subVideo, subIndex) => {
                 const subCompleted = completedVideoIds.includes(subVideo.id);
-                const subLocked = !completedVideoIds.includes(mainVideo.id);
+                const subLocked = isVideoLocked(subVideo, flatIndex);
                 const subActive = flatIndex === currentVideoIndex;
 
                 const subItem = createPlaylistItem(subVideo, flatIndex, subCompleted, subLocked, subActive, true);
@@ -1614,6 +1613,19 @@ function clearFilesSearch() {
     noResults.style.display = 'none';
 
     loadFiles();
+}
+
+function isVideoLocked(video, index) {
+    if (video.unlocked === true) return false;
+
+    if (index === 0) return false;
+
+    const previousVideo = allVideos[index - 1];
+    if (previousVideo && completedVideoIds.includes(previousVideo.id)) {
+        return false;
+    }
+
+    return true;
 }
 
 initAntiInspect();
