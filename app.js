@@ -1537,8 +1537,15 @@ function handleFilesSearch(e) {
         (folder.description && folder.description.toLowerCase().includes(searchTerm))
     );
 
-    const filteredFiles = allFiles.filter(file =>
+    const standaloneFiles = allFiles.filter(file =>
         !file.folder_id && (
+            file.name.toLowerCase().includes(searchTerm) ||
+            (file.description && file.description.toLowerCase().includes(searchTerm))
+        )
+    );
+
+    const filesInsideFolders = allFiles.filter(file =>
+        file.folder_id && (
             file.name.toLowerCase().includes(searchTerm) ||
             (file.description && file.description.toLowerCase().includes(searchTerm))
         )
@@ -1547,7 +1554,9 @@ function handleFilesSearch(e) {
     container.innerHTML = '';
     noFiles.style.display = 'none';
 
-    if (filteredFolders.length === 0 && filteredFiles.length === 0) {
+    const totalResults = filteredFolders.length + standaloneFiles.length + filesInsideFolders.length;
+
+    if (totalResults === 0) {
         noResults.style.display = 'block';
     } else {
         noResults.style.display = 'none';
@@ -1557,12 +1566,43 @@ function handleFilesSearch(e) {
             container.appendChild(card);
         });
 
-        filteredFiles.forEach(file => {
+        standaloneFiles.forEach(file => {
             const card = createFileCard(file);
+            container.appendChild(card);
+        });
+
+        filesInsideFolders.forEach(file => {
+            const parentFolder = allFolders.find(f => f.id === file.folder_id);
+            const card = createFileCardWithFolder(file, parentFolder);
             container.appendChild(card);
         });
     }
 }
+
+function createFileCardWithFolder(file, parentFolder) {
+    const card = document.createElement('div');
+    card.className = 'file-card';
+
+    const icon = getFileIcon(file.name);
+
+    card.innerHTML = `
+        <div class="file-icon">${icon}</div>
+        ${parentFolder ? `
+            <div class="badge" style="margin-bottom: 8px; background: rgba(107, 155, 124, 0.15); color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-folder" style="font-size: 12px;"></i>
+                <span>${parentFolder.name}</span>
+            </div>
+        ` : ''}
+        <h3>${file.name}</h3>
+        <p>${file.description || 'Sem descrição'}</p>
+        <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn">
+        <i class="fa-solid fa-download"></i>
+        </button>
+    `;
+
+    return card;
+}
+
 
 function clearFilesSearch() {
     const searchInput = document.getElementById('files-search');
