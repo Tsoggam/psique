@@ -894,6 +894,8 @@
         }
     }
 
+    window.downloadFile = downloadFile;
+
     function getFileIcon(filename) {
         const ext = filename.split('.').pop().toLowerCase();
         const icons = {
