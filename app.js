@@ -1638,7 +1638,7 @@
         return true;
     }
 
-    initAntiInspect();
+    //initAntiInspect();
 
     const style = document.createElement('style');
     style.textContent = `
