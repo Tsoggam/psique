@@ -67,98 +67,452 @@
         </nav>
 
         <div id="admin-panel" style="display: none;">
-            <div class="container">
-                <div class="welcome-section">
-                    <h1><i class="fa-brands fa-pagelines fa-beat" style="color: #6b9b7c;"></i> PAINEL</h1>
+
+            <!-- Admin Nav Tabs -->
+            <div class="admin-nav">
+                <div class="admin-nav-inner">
+                    <button class="admin-tab active" data-admin-tab="dashboard">
+                        <i class="fa-solid fa-chart-line"></i>
+                        <span>Dashboard</span>
+                    </button>
+                    <button class="admin-tab" data-admin-tab="videos-mgmt">
+                        <i class="fa-solid fa-video"></i>
+                        <span>Vídeos</span>
+                    </button>
+                    <button class="admin-tab" data-admin-tab="materials-mgmt">
+                        <i class="fa-solid fa-folder"></i>
+                        <span>Materiais</span>
+                    </button>
+                    <button class="admin-tab" data-admin-tab="users-mgmt">
+                        <i class="fa-solid fa-users"></i>
+                        <span>Usuários</span>
+                    </button>
                 </div>
+            </div>
 
-                <div class="admin-stats-grid">
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fa-solid fa-users"></i>
-                        </div>
-                        <div class="stat-info">
-                            <h3 id="total-users">0</h3>
-                            <p>Total de Usuários</p>
-                        </div>
+            <!-- ===== TAB: DASHBOARD ===== -->
+            <div class="admin-tab-content active" id="tab-dashboard">
+                <div class="container">
+                    <div class="welcome-section">
+                        <h1><i class="fa-brands fa-pagelines fa-beat" style="color: #6b9b7c;"></i> PAINEL</h1>
                     </div>
 
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fa-solid fa-video"></i>
+                    <div class="admin-stats-grid">
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fa-solid fa-users"></i></div>
+                            <div class="stat-info">
+                                <h3 id="total-users">0</h3>
+                                <p>Total de Usuários</p>
+                            </div>
                         </div>
-                        <div class="stat-info">
-                            <h3 id="total-videos">0</h3>
-                            <p>Total de Vídeos</p>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fa-solid fa-video"></i></div>
+                            <div class="stat-info">
+                                <h3 id="total-videos">0</h3>
+                                <p>Total de Vídeos</p>
+                            </div>
                         </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fa-solid fa-check-circle"></i>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fa-solid fa-check-circle"></i></div>
+                            <div class="stat-info">
+                                <h3 id="total-completions">0</h3>
+                                <p>Vídeos Concluídos</p>
+                            </div>
                         </div>
-                        <div class="stat-info">
-                            <h3 id="total-completions">0</h3>
-                            <p>Vídeos Concluídos</p>
-                        </div>
-                    </div>
-
-                    <div class="stat-card">
-                        <div class="stat-icon">
-                            <i class="fa-solid fa-user-check"></i>
-                        </div>
-                        <div class="stat-info">
-                            <h3 id="active-users">0</h3>
-                            <p>Usuários Ativos (7 dias)</p>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="admin-charts">
-                    <div class="chart-card">
-                        <h3><i class="fa-solid fa-chart-line"></i> Progresso por Usuário</h3>
-                        <div id="user-progress-chart" class="chart-container"></div>
-                    </div>
-
-                    <div class="chart-card">
-                        <h3><i class="fa-solid fa-chart-pie"></i> Distribuição por Nível</h3>
-                        <div id="level-distribution-chart" class="chart-container"></div>
-                    </div>
-                </div>
-
-                <div class="chart-card full-width">
-                    <div class="table-header">
-                        <h3><i class="fa-solid fa-table"></i> Detalhes dos Usuários</h3>
-                        <div class="filter-dropdown">
-                            <button class="filter-btn" id="filter-btn">
-                                <i class="fa-solid fa-arrow-down-short-wide"></i>
-                                <span>Filtrar</span>
-                            </button>
-                            <div class="filter-menu" id="filter-menu">
-                                <button class="filter-option" data-filter="default">
-                                    <i class="fa-solid fa-list"></i>
-                                    Padrão
-                                </button>
-                                <button class="filter-option" data-filter="level">
-                                    <i class="fa-solid fa-layer-group"></i>
-                                    Por Nível
-                                </button>
-                                <button class="filter-option" data-filter="recent">
-                                    <i class="fa-solid fa-clock"></i>
-                                    Acesso Recente
-                                </button>
-                                <button class="filter-option" data-filter="alphabetical">
-                                    <i class="fa-solid fa-arrow-down-a-z"></i>
-                                    Ordem Alfabética
-                                </button>
-                                <button class="filter-option" data-filter="completed">
-                                    <i class="fa-solid fa-trophy"></i>
-                                    Mais Vídeos Concluídos
-                                </button>
+                        <div class="stat-card">
+                            <div class="stat-icon"><i class="fa-solid fa-user-check"></i></div>
+                            <div class="stat-info">
+                                <h3 id="active-users">0</h3>
+                                <p>Usuários Ativos (7 dias)</p>
                             </div>
                         </div>
                     </div>
-                    <div id="users-table" class="users-table-container"></div>
+
+                    <div class="admin-charts">
+                        <div class="chart-card">
+                            <h3><i class="fa-solid fa-chart-line"></i> Progresso por Usuário</h3>
+                            <div id="user-progress-chart" class="chart-container"></div>
+                        </div>
+                        <div class="chart-card">
+                            <h3><i class="fa-solid fa-chart-pie"></i> Distribuição por Nível</h3>
+                            <div id="level-distribution-chart" class="chart-container"></div>
+                        </div>
+                    </div>
+
+                    <div class="chart-card full-width">
+                        <div class="table-header">
+                            <h3><i class="fa-solid fa-table"></i> Detalhes dos Usuários</h3>
+                            <div class="filter-dropdown">
+                                <button class="filter-btn" id="filter-btn">
+                                    <i class="fa-solid fa-arrow-down-short-wide"></i>
+                                    <span>Filtrar</span>
+                                </button>
+                                <div class="filter-menu" id="filter-menu">
+                                    <button class="filter-option" data-filter="default"><i class="fa-solid fa-list"></i>
+                                        Padrão</button>
+                                    <button class="filter-option" data-filter="level"><i
+                                            class="fa-solid fa-layer-group"></i> Por Nível</button>
+                                    <button class="filter-option" data-filter="recent"><i class="fa-solid fa-clock"></i>
+                                        Acesso Recente</button>
+                                    <button class="filter-option" data-filter="alphabetical"><i
+                                            class="fa-solid fa-arrow-down-a-z"></i> Ordem Alfabética</button>
+                                    <button class="filter-option" data-filter="completed"><i
+                                            class="fa-solid fa-trophy"></i> Mais Vídeos Concluídos</button>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="users-table" class="users-table-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: VIDEOS MGMT ===== -->
+            <div class="admin-tab-content" id="tab-videos-mgmt">
+                <div class="container">
+                    <div class="mgmt-header">
+                        <h2><i class="fa-solid fa-video"></i> Gerenciar Vídeos</h2>
+                        <button class="btn btn-primary" id="btn-new-video-group">
+                            <i class="fa-solid fa-plus"></i> Novo Grupo de Vídeos
+                        </button>
+                    </div>
+                    <div id="videos-mgmt-loading" class="loading" style="display:none;">
+                        <div class="spinner"></div>
+                        <p>Carregando...</p>
+                    </div>
+                    <div id="videos-mgmt-list" class="mgmt-list"></div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: MATERIALS MGMT ===== -->
+            <div class="admin-tab-content" id="tab-materials-mgmt">
+                <div class="container">
+                    <div class="mgmt-header">
+                        <h2><i class="fa-solid fa-folder"></i> Gerenciar Materiais</h2>
+                        <div class="mgmt-header-actions">
+                            <button class="btn btn-primary" id="btn-new-folder">
+                                <i class="fa-solid fa-folder-plus"></i> Nova Pasta
+                            </button>
+                            <button class="btn btn-secondary" id="btn-new-standalone-file">
+                                <i class="fa-solid fa-file-circle-plus"></i> Novo Arquivo Avulso
+                            </button>
+                        </div>
+                    </div>
+                    <div id="materials-mgmt-loading" class="loading" style="display:none;">
+                        <div class="spinner"></div>
+                        <p>Carregando...</p>
+                    </div>
+                    <div id="materials-mgmt-list" class="mgmt-list"></div>
+                </div>
+            </div>
+
+            <!-- ===== TAB: USERS MGMT ===== -->
+            <div class="admin-tab-content" id="tab-users-mgmt">
+                <div class="container">
+                    <div class="mgmt-header">
+                        <h2><i class="fa-solid fa-users"></i> Gerenciar Usuários</h2>
+                        <button class="btn btn-primary" id="btn-new-user">
+                            <i class="fa-solid fa-user-plus"></i> Novo Usuário
+                        </button>
+                    </div>
+                    <div id="users-mgmt-loading" class="loading" style="display:none;">
+                        <div class="spinner"></div>
+                        <p>Carregando...</p>
+                    </div>
+                    <div id="users-mgmt-list" class="mgmt-list"></div>
+                </div>
+            </div>
+
+        </div>
+
+        <!-- ===== MODAL: VIDEO GROUP ===== -->
+        <div id="modal-video-group" class="modal">
+            <div class="modal-backdrop" id="backdrop-video-group"></div>
+            <div class="mgmt-modal-content">
+                <div class="mgmt-modal-header">
+                    <h3 id="modal-video-group-title">Novo Grupo de Vídeos</h3>
+                    <button class="close-modal" id="close-modal-video-group"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="mgmt-modal-body">
+                    <div class="form-group">
+                        <label>Título *</label>
+                        <input type="text" id="vg-title" placeholder="Ex: Módulo 1 – Introdução">
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea id="vg-description" rows="3" placeholder="Descrição do grupo..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>URL do Vídeo Principal *</label>
+                            <input type="text" id="vg-url" placeholder="YouTube, Vimeo, Google Drive...">
+                        </div>
+                        <div class="form-group">
+                            <label>URL da Thumbnail</label>
+                            <input type="text" id="vg-thumbnail" placeholder="https://...">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nível de Acesso *</label>
+                            <select id="vg-access-level">
+                                <option value="1">Psicólogos</option>
+                                <option value="2">Administrativo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Número da Seção</label>
+                            <input type="text" id="vg-section" placeholder="Ex: 1, 1.1, 2A...">
+                        </div>
+                        <div class="form-group">
+                            <label>Ordem</label>
+                            <input type="number" id="vg-order" placeholder="0" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="vg-unlocked">
+                            <span>Desbloqueado (não exige conclusão anterior)</span>
+                        </label>
+                    </div>
+
+                    <div class="form-section-title">
+                        <i class="fa-solid fa-file-arrow-down"></i> Arquivos vinculados ao vídeo principal
+                    </div>
+                    <div id="vg-files-list" class="linked-files-list"></div>
+                    <button type="button" class="btn btn-ghost" id="btn-add-vg-file">
+                        <i class="fa-solid fa-plus"></i> Vincular arquivo
+                    </button>
+                </div>
+                <div class="mgmt-modal-footer">
+                    <button class="btn btn-ghost" id="cancel-video-group">Cancelar</button>
+                    <button class="btn btn-primary" id="save-video-group">
+                        <i class="fa-solid fa-floppy-disk"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: SUB VIDEO ===== -->
+        <div id="modal-sub-video" class="modal">
+            <div class="modal-backdrop" id="backdrop-sub-video"></div>
+            <div class="mgmt-modal-content">
+                <div class="mgmt-modal-header">
+                    <h3 id="modal-sub-video-title">Novo Sub-Vídeo</h3>
+                    <button class="close-modal" id="close-modal-sub-video"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="mgmt-modal-body">
+                    <div class="form-group">
+                        <label>Título *</label>
+                        <input type="text" id="sv-title" placeholder="Ex: Aula 1.1 – Conceitos Básicos">
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea id="sv-description" rows="3" placeholder="Descrição..."></textarea>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>URL do Vídeo *</label>
+                            <input type="text" id="sv-url" placeholder="YouTube, Vimeo, Google Drive...">
+                        </div>
+                        <div class="form-group">
+                            <label>URL da Thumbnail</label>
+                            <input type="text" id="sv-thumbnail" placeholder="https://...">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Número da Seção</label>
+                            <input type="text" id="sv-section" placeholder="Ex: 1.1, 1.2...">
+                        </div>
+                        <div class="form-group">
+                            <label>Ordem</label>
+                            <input type="number" id="sv-order" placeholder="0" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="sv-unlocked">
+                            <span>Desbloqueado</span>
+                        </label>
+                    </div>
+
+                    <div class="form-section-title">
+                        <i class="fa-solid fa-file-arrow-down"></i> Arquivos vinculados
+                    </div>
+                    <div id="sv-files-list" class="linked-files-list"></div>
+                    <button type="button" class="btn btn-ghost" id="btn-add-sv-file">
+                        <i class="fa-solid fa-plus"></i> Vincular arquivo
+                    </button>
+                </div>
+                <div class="mgmt-modal-footer">
+                    <button class="btn btn-ghost" id="cancel-sub-video">Cancelar</button>
+                    <button class="btn btn-primary" id="save-sub-video">
+                        <i class="fa-solid fa-floppy-disk"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: FOLDER ===== -->
+        <div id="modal-folder-mgmt" class="modal">
+            <div class="modal-backdrop" id="backdrop-folder-mgmt"></div>
+            <div class="mgmt-modal-content">
+                <div class="mgmt-modal-header">
+                    <h3 id="modal-folder-mgmt-title">Nova Pasta</h3>
+                    <button class="close-modal" id="close-modal-folder-mgmt"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="mgmt-modal-body">
+                    <div class="form-group">
+                        <label>Nome *</label>
+                        <input type="text" id="fm-name" placeholder="Nome da pasta">
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea id="fm-description" rows="3" placeholder="Descrição..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>Nível de Acesso *</label>
+                        <select id="fm-access-level">
+                            <option value="1">Psicólogos</option>
+                            <option value="2">Administrativo</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mgmt-modal-footer">
+                    <button class="btn btn-ghost" id="cancel-folder-mgmt">Cancelar</button>
+                    <button class="btn btn-primary" id="save-folder-mgmt">
+                        <i class="fa-solid fa-floppy-disk"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: FILE ===== -->
+        <div id="modal-file-mgmt" class="modal">
+            <div class="modal-backdrop" id="backdrop-file-mgmt"></div>
+            <div class="mgmt-modal-content">
+                <div class="mgmt-modal-header">
+                    <h3 id="modal-file-mgmt-title">Novo Arquivo</h3>
+                    <button class="close-modal" id="close-modal-file-mgmt"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="mgmt-modal-body">
+                    <div class="form-group">
+                        <label>Nome *</label>
+                        <input type="text" id="file-mgmt-name" placeholder="Nome do arquivo">
+                    </div>
+                    <div class="form-group">
+                        <label>Descrição</label>
+                        <textarea id="file-mgmt-description" rows="2" placeholder="Descrição..."></textarea>
+                    </div>
+                    <div class="form-group">
+                        <label>URL do Arquivo *</label>
+                        <input type="text" id="file-mgmt-url" placeholder="https://...">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nível de Acesso *</label>
+                            <select id="file-mgmt-access-level">
+                                <option value="1">Psicólogos</option>
+                                <option value="2">Administrativo</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Pasta (opcional)</label>
+                            <select id="file-mgmt-folder">
+                                <option value="">Nenhuma (arquivo avulso)</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label>Ordem</label>
+                            <input type="number" id="file-mgmt-order" placeholder="0" min="0">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label class="checkbox-label">
+                            <input type="checkbox" id="file-mgmt-show" checked>
+                            <span>Mostrar na aba Materiais</span>
+                        </label>
+                    </div>
+                </div>
+                <div class="mgmt-modal-footer">
+                    <button class="btn btn-ghost" id="cancel-file-mgmt">Cancelar</button>
+                    <button class="btn btn-primary" id="save-file-mgmt">
+                        <i class="fa-solid fa-floppy-disk"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: USER ===== -->
+        <div id="modal-user-mgmt" class="modal">
+            <div class="modal-backdrop" id="backdrop-user-mgmt"></div>
+            <div class="mgmt-modal-content">
+                <div class="mgmt-modal-header">
+                    <h3 id="modal-user-mgmt-title">Novo Usuário</h3>
+                    <button class="close-modal" id="close-modal-user-mgmt"><i class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="mgmt-modal-body">
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label>Nome Completo *</label>
+                            <input type="text" id="user-mgmt-fullname" placeholder="Nome Sobrenome">
+                        </div>
+                        <div class="form-group">
+                            <label>Nome de Exibição</label>
+                            <input type="text" id="user-mgmt-name" placeholder="Como aparece no sistema">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group" id="user-email-group">
+                            <label>Email *</label>
+                            <input type="email" id="user-mgmt-email" placeholder="email@exemplo.com">
+                        </div>
+                        <div class="form-group" id="user-password-group">
+                            <label id="user-password-label">Senha *</label>
+                            <input type="password" id="user-mgmt-password" placeholder="Mínimo 6 caracteres">
+                            <small id="user-password-hint"
+                                style="color: var(--text-gray); margin-top: 4px; display: block;">Deixe em branco para
+                                não alterar</small>
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Nível de Acesso *</label>
+                        <select id="user-mgmt-access-level">
+                            <option value="1">Psicólogos</option>
+                            <option value="2">Administrativo</option>
+                            <option value="3">Desenvolvedor</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="mgmt-modal-footer">
+                    <button class="btn btn-ghost" id="cancel-user-mgmt">Cancelar</button>
+                    <button class="btn btn-primary" id="save-user-mgmt">
+                        <i class="fa-solid fa-floppy-disk"></i> Salvar
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ===== MODAL: CONFIRM DELETE ===== -->
+        <div id="modal-confirm-delete" class="modal">
+            <div class="modal-backdrop" id="backdrop-confirm-delete"></div>
+            <div class="mgmt-modal-content mgmt-modal-small">
+                <div class="mgmt-modal-header">
+                    <h3>Confirmar Exclusão</h3>
+                    <button class="close-modal" id="close-modal-confirm-delete"><i
+                            class="fa-solid fa-xmark"></i></button>
+                </div>
+                <div class="mgmt-modal-body">
+                    <div class="delete-warning">
+                        <i class="fa-solid fa-triangle-exclamation"></i>
+                        <p id="confirm-delete-message">Tem certeza que deseja excluir este item?</p>
+                    </div>
+                </div>
+                <div class="mgmt-modal-footer">
+                    <button class="btn btn-ghost" id="cancel-confirm-delete">Cancelar</button>
+                    <button class="btn btn-danger" id="confirm-delete-btn">
+                        <i class="fa-solid fa-trash"></i> Excluir
+                    </button>
                 </div>
             </div>
         </div>

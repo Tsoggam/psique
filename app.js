@@ -1440,8 +1440,7 @@
     }
 
     function initAntiInspect() {
-        const REDIRECT_URL = 'https://www.psiquebrasilia.com.br'
-        let devToolsOpen = false;
+        const REDIRECT_URL = 'https://www.psiquebrasilia.com.br';
 
         document.addEventListener('contextmenu', (e) => {
             e.preventDefault();
@@ -1449,76 +1448,23 @@
         });
 
         document.addEventListener('keydown', (e) => {
-            if (e.key === 'F12' || e.keyCode === 123) {
+            const key = e.key;
+
+            if (key === 'F12') {
                 e.preventDefault();
-                window.location.href = REDIRECT_URL;
                 return false;
             }
 
-            if (e.ctrlKey && (e.shiftKey || e.key === 'u' || e.key === 'U')) {
-                if (['i', 'I', 'j', 'J', 'c', 'C', 'u', 'U'].includes(e.key)) {
-                    e.preventDefault();
-                    window.location.href = REDIRECT_URL;
-                    return false;
-                }
+            if (e.ctrlKey && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(key)) {
+                e.preventDefault();
+                return false;
             }
-        });
 
-        const threshold = 160;
-        setInterval(() => {
-            if (
-                window.outerWidth - window.innerWidth > threshold ||
-                window.outerHeight - window.innerHeight > threshold
-            ) {
-                if (!devToolsOpen) {
-                    devToolsOpen = true;
-                    window.location.href = REDIRECT_URL;
-                }
-            }
-        }, 1000);
-
-        const element = new Image();
-        Object.defineProperty(element, 'id', {
-            get: function () {
-                if (!devToolsOpen) {
-                    devToolsOpen = true;
-                    window.location.href = REDIRECT_URL;
-                }
-            }
-        });
-
-        if (window.self !== window.top) {
-            window.location.href = REDIRECT_URL;
-        }
-
-        document.addEventListener('selectstart', (e) => {
-            const target = e.target;
-            if (target.tagName === 'SCRIPT' || target.tagName === 'STYLE') {
+            if (e.ctrlKey && (key === 'u' || key === 'U')) {
                 e.preventDefault();
                 return false;
             }
         });
-
-        let checkCount = 0;
-        const detectDevTools = () => {
-            const widthThreshold = window.outerWidth - window.innerWidth > threshold;
-            const heightThreshold = window.outerHeight - window.innerHeight > threshold;
-
-            if ((widthThreshold || heightThreshold) && checkCount > 2) {
-                if (!devToolsOpen) {
-                    devToolsOpen = true;
-                    window.location.href = REDIRECT_URL;
-                }
-            }
-
-            if (widthThreshold || heightThreshold) {
-                checkCount++;
-            } else {
-                checkCount = 0;
-            }
-        };
-
-        setInterval(detectDevTools, 500);
     }
 
     document.getElementById('files-search')?.addEventListener('input', handleFilesSearch);
@@ -1638,7 +1584,775 @@
         return true;
     }
 
-    //initAntiInspect();
+    initAntiInspect();
+
+    document.querySelectorAll('.admin-tab').forEach(tab => {
+        tab.addEventListener('click', () => {
+            const target = tab.dataset.adminTab;
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
+            tab.classList.add('active');
+            document.getElementById('tab-' + target).classList.add('active');
+
+            if (target === 'videos-mgmt') loadVideosMgmt();
+            if (target === 'materials-mgmt') loadMaterialsMgmt();
+            if (target === 'users-mgmt') loadUsersMgmt();
+        });
+    });
+
+    function openMgmtModal(id) {
+        document.getElementById(id).classList.add('active');
+        document.body.style.overflow = 'hidden';
+    }
+    function closeMgmtModal(id) {
+        document.getElementById(id).classList.remove('active');
+        document.body.style.overflow = 'auto';
+    }
+
+    ['video-group', 'sub-video', 'folder-mgmt', 'file-mgmt', 'user-mgmt', 'confirm-delete'].forEach(name => {
+        document.getElementById('close-modal-' + name)?.addEventListener('click', () => closeMgmtModal('modal-' + name));
+        document.getElementById('backdrop-' + name)?.addEventListener('click', () => closeMgmtModal('modal-' + name));
+        document.getElementById('cancel-' + name)?.addEventListener('click', () => closeMgmtModal('modal-' + name));
+    });
+
+    let _deleteCallback = null;
+    function confirmDelete(message, callback) {
+        document.getElementById('confirm-delete-message').textContent = message;
+        _deleteCallback = callback;
+        openMgmtModal('modal-confirm-delete');
+    }
+    document.getElementById('confirm-delete-btn').addEventListener('click', async () => {
+        if (_deleteCallback) {
+            const btn = document.getElementById('confirm-delete-btn');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Excluindo...';
+            await _deleteCallback();
+            _deleteCallback = null;
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-trash"></i> Excluir';
+        }
+        closeMgmtModal('modal-confirm-delete');
+    });
+
+    let _editingVideoId = null;
+    let _editingParentId = null;
+    let _vgLinkedFiles = [];
+    let _svLinkedFiles = [];
+    let _allFilesForPicker = [];
+
+    async function loadVideosMgmt() {
+        const loading = document.getElementById('videos-mgmt-loading');
+        const list = document.getElementById('videos-mgmt-list');
+        loading.style.display = 'flex';
+        list.innerHTML = '';
+
+        const { data: videos } = await supabase
+            .from('videos')
+            .select('*, access_levels(name)')
+            .order('order_index', { ascending: true });
+
+        loading.style.display = 'none';
+
+        if (!videos || videos.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>Nenhum vídeo cadastrado.</p></div>';
+            return;
+        }
+
+        const hierarchy = organizeVideoHierarchy(videos);
+
+        hierarchy.forEach(group => {
+            const groupEl = document.createElement('div');
+            groupEl.className = 'mgmt-video-group';
+
+            const main = group.main;
+            groupEl.innerHTML = `
+                <div class="mgmt-video-group-header">
+                    <div class="mgmt-video-info">
+                        <span class="mgmt-section-badge">${main.section_number || main.order_index || '—'}</span>
+                        <div>
+                            <strong>${main.title}</strong>
+                            <small>${main.access_levels?.name || ''} · ${group.children.length} sub-vídeo(s)</small>
+                        </div>
+                    </div>
+                    <div class="mgmt-actions">
+                        <button class="btn-icon" title="Adicionar sub-vídeo" data-action="add-sub" data-id="${main.id}">
+                            <i class="fa-solid fa-circle-plus"></i>
+                        </button>
+                        <button class="btn-icon" title="Editar" data-action="edit-video" data-id="${main.id}">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btn-icon btn-icon-danger" title="Excluir grupo" data-action="delete-video" data-id="${main.id}" data-title="${main.title}">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            if (group.children.length > 0) {
+                const subList = document.createElement('div');
+                subList.className = 'mgmt-sub-list';
+                group.children.forEach(child => {
+                    const childEl = document.createElement('div');
+                    childEl.className = 'mgmt-sub-item';
+                    childEl.innerHTML = `
+                        <div class="mgmt-video-info">
+                            <span class="mgmt-section-badge mgmt-section-badge-sm">${child.section_number || child.order_index || '—'}</span>
+                            <div><span>${child.title}</span></div>
+                        </div>
+                        <div class="mgmt-actions">
+                            <button class="btn-icon" title="Editar" data-action="edit-video" data-id="${child.id}" data-parent="${main.id}">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-video" data-id="${child.id}" data-title="${child.title}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    subList.appendChild(childEl);
+                });
+                groupEl.appendChild(subList);
+            }
+
+            list.appendChild(groupEl);
+        });
+
+        list.querySelectorAll('[data-action="add-sub"]').forEach(btn => {
+            btn.addEventListener('click', () => openSubVideoModal(null, parseInt(btn.dataset.id)));
+        });
+        list.querySelectorAll('[data-action="edit-video"]').forEach(btn => {
+            btn.addEventListener('click', () => openEditVideoModal(parseInt(btn.dataset.id), btn.dataset.parent ? parseInt(btn.dataset.parent) : null));
+        });
+        list.querySelectorAll('[data-action="delete-video"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                confirmDelete(`Excluir "${btn.dataset.title}"? Sub-vídeos e progressos vinculados também serão removidos.`, async () => {
+                    await deleteVideo(parseInt(btn.dataset.id));
+                    loadVideosMgmt();
+                });
+            });
+        });
+    }
+
+    async function deleteVideo(videoId) {
+        await supabase.from('video_files').delete().eq('video_id', videoId);
+        await supabase.from('video_progress').delete().eq('video_id', videoId);
+        const { data: subs } = await supabase.from('videos').select('id').eq('parent_video_id', videoId);
+        if (subs) {
+            for (const sub of subs) {
+                await supabase.from('video_files').delete().eq('video_id', sub.id);
+                await supabase.from('video_progress').delete().eq('video_id', sub.id);
+                await supabase.from('videos').delete().eq('id', sub.id);
+            }
+        }
+        await supabase.from('videos').delete().eq('id', videoId);
+        showToast('🗑️ Vídeo excluído.');
+    }
+
+    async function loadFilesForPicker() {
+        const { data } = await supabase.from('files').select('id, name').order('name');
+        _allFilesForPicker = data || [];
+    }
+
+    async function getVideoLinkedFiles(videoId) {
+        const { data } = await supabase
+            .from('video_files')
+            .select('file_id, display_order, files(id, name)')
+            .eq('video_id', videoId)
+            .order('display_order');
+        return (data || []).map(vf => ({ file_id: vf.file_id, display_order: vf.display_order, name: vf.files?.name || '' }));
+    }
+
+    function renderLinkedFilesList(containerId, linkedFiles, btnAddId) {
+        const container = document.getElementById(containerId);
+        container.innerHTML = '';
+        linkedFiles.forEach((lf, i) => {
+            const row = document.createElement('div');
+            row.className = 'linked-file-row';
+            row.innerHTML = `
+                <select class="linked-file-select" data-index="${i}">
+                    <option value="">Selecione um arquivo...</option>
+                    ${_allFilesForPicker.map(f => `<option value="${f.id}" ${f.id === lf.file_id ? 'selected' : ''}>${f.name}</option>`).join('')}
+                </select>
+                <input type="number" class="linked-file-order" data-index="${i}" value="${lf.display_order || i + 1}" min="1" style="width:70px;" placeholder="Ordem">
+                <button type="button" class="btn-icon btn-icon-danger linked-file-remove" data-index="${i}">
+                    <i class="fa-solid fa-xmark"></i>
+                </button>
+            `;
+            container.appendChild(row);
+        });
+
+        container.querySelectorAll('.linked-file-select').forEach(sel => {
+            sel.addEventListener('change', (e) => {
+                linkedFiles[parseInt(e.target.dataset.index)].file_id = parseInt(e.target.value) || null;
+            });
+        });
+        container.querySelectorAll('.linked-file-order').forEach(inp => {
+            inp.addEventListener('change', (e) => {
+                linkedFiles[parseInt(e.target.dataset.index)].display_order = parseInt(e.target.value) || 1;
+            });
+        });
+        container.querySelectorAll('.linked-file-remove').forEach(btn => {
+            btn.addEventListener('click', () => {
+                linkedFiles.splice(parseInt(btn.dataset.index), 1);
+                renderLinkedFilesList(containerId, linkedFiles, btnAddId);
+            });
+        });
+    }
+
+    document.getElementById('btn-new-video-group').addEventListener('click', async () => {
+        await loadFilesForPicker();
+        _editingVideoId = null;
+        _vgLinkedFiles = [];
+        document.getElementById('modal-video-group-title').textContent = 'Novo Grupo de Vídeos';
+        ['vg-title', 'vg-description', 'vg-url', 'vg-thumbnail', 'vg-section', 'vg-order'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('vg-unlocked').checked = false;
+        document.getElementById('vg-access-level').value = '1';
+        renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+        openMgmtModal('modal-video-group');
+    });
+
+    document.getElementById('btn-add-vg-file').addEventListener('click', () => {
+        _vgLinkedFiles.push({ file_id: null, display_order: _vgLinkedFiles.length + 1 });
+        renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+    });
+
+    async function openEditVideoModal(videoId, parentId = null) {
+        await loadFilesForPicker();
+        _editingVideoId = videoId;
+        _editingParentId = parentId;
+
+        const { data: video } = await supabase.from('videos').select('*').eq('id', videoId).single();
+        if (!video) return;
+
+        const isGroup = !parentId;
+        const prefix = isGroup ? 'vg' : 'sv';
+        const modalId = isGroup ? 'modal-video-group' : 'modal-sub-video';
+
+        document.getElementById(isGroup ? 'modal-video-group-title' : 'modal-sub-video-title').textContent = 'Editar Vídeo';
+        document.getElementById(`${prefix}-title`).value = video.title || '';
+        document.getElementById(`${prefix}-description`).value = video.description || '';
+        document.getElementById(`${prefix}-url`).value = video.video_url || '';
+        document.getElementById(`${prefix}-thumbnail`).value = video.thumbnail_url || '';
+        document.getElementById(`${prefix}-section`).value = video.section_number || '';
+        document.getElementById(`${prefix}-order`).value = video.order_index ?? '';
+        document.getElementById(`${prefix}-unlocked`).checked = !!video.unlocked;
+        if (isGroup) document.getElementById('vg-access-level').value = video.access_level_id || '1';
+
+        const linked = await getVideoLinkedFiles(videoId);
+        if (isGroup) {
+            _vgLinkedFiles = linked;
+            renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+        } else {
+            _svLinkedFiles = linked;
+            renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+        }
+
+        openMgmtModal(modalId);
+    }
+
+    async function saveVideoData(prefix, isGroup, parentId = null) {
+        const title = document.getElementById(`${prefix}-title`).value.trim();
+        const url = document.getElementById(`${prefix}-url`).value.trim();
+        if (!title || !url) { showToast('⚠️ Título e URL são obrigatórios.'); return false; }
+
+        const payload = {
+            title,
+            description: document.getElementById(`${prefix}-description`).value.trim() || null,
+            video_url: url,
+            thumbnail_url: document.getElementById(`${prefix}-thumbnail`).value.trim() || null,
+            section_number: document.getElementById(`${prefix}-section`).value.trim() || null,
+            order_index: parseInt(document.getElementById(`${prefix}-order`).value) || 0,
+            unlocked: document.getElementById(`${prefix}-unlocked`).checked,
+        };
+
+        if (isGroup) {
+            payload.access_level_id = parseInt(document.getElementById('vg-access-level').value);
+            payload.parent_video_id = null;
+        } else {
+            payload.parent_video_id = parentId;
+            const { data: parent } = await supabase.from('videos').select('access_level_id').eq('id', parentId).single();
+            payload.access_level_id = parent?.access_level_id || 1;
+        }
+
+        let videoId = _editingVideoId;
+        if (videoId) {
+            const { error } = await supabase.from('videos').update(payload).eq('id', videoId);
+            if (error) { showToast('❌ Erro: ' + error.message); return false; }
+        } else {
+            const { data, error } = await supabase.from('videos').insert(payload).select('id').single();
+            if (error) { showToast('❌ Erro: ' + error.message); return false; }
+            videoId = data.id;
+        }
+
+        await supabase.from('video_files').delete().eq('video_id', videoId);
+        const linkedFiles = isGroup ? _vgLinkedFiles : _svLinkedFiles;
+        const validFiles = linkedFiles.filter(lf => lf.file_id);
+        if (validFiles.length > 0) {
+            await supabase.from('video_files').insert(validFiles.map(lf => ({
+                video_id: videoId,
+                file_id: lf.file_id,
+                display_order: lf.display_order
+            })));
+        }
+
+        showToast('✅ Vídeo salvo!');
+        return true;
+    }
+
+    document.getElementById('save-video-group').addEventListener('click', async () => {
+        const btn = document.getElementById('save-video-group');
+        btn.disabled = true;
+        const ok = await saveVideoData('vg', true);
+        btn.disabled = false;
+        if (ok) { closeMgmtModal('modal-video-group'); loadVideosMgmt(); }
+    });
+
+    async function openSubVideoModal(videoId, parentId) {
+        await loadFilesForPicker();
+        _editingVideoId = videoId;
+        _editingParentId = parentId;
+        _svLinkedFiles = videoId ? await getVideoLinkedFiles(videoId) : [];
+        document.getElementById('modal-sub-video-title').textContent = videoId ? 'Editar Sub-Vídeo' : 'Novo Sub-Vídeo';
+        ['sv-title', 'sv-description', 'sv-url', 'sv-thumbnail', 'sv-section', 'sv-order'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('sv-unlocked').checked = false;
+
+        if (videoId) {
+            const { data: v } = await supabase.from('videos').select('*').eq('id', videoId).single();
+            if (v) {
+                document.getElementById('sv-title').value = v.title || '';
+                document.getElementById('sv-description').value = v.description || '';
+                document.getElementById('sv-url').value = v.video_url || '';
+                document.getElementById('sv-thumbnail').value = v.thumbnail_url || '';
+                document.getElementById('sv-section').value = v.section_number || '';
+                document.getElementById('sv-order').value = v.order_index ?? '';
+                document.getElementById('sv-unlocked').checked = !!v.unlocked;
+            }
+        }
+        renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+        openMgmtModal('modal-sub-video');
+    }
+
+    document.getElementById('btn-add-sv-file').addEventListener('click', () => {
+        _svLinkedFiles.push({ file_id: null, display_order: _svLinkedFiles.length + 1 });
+        renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+    });
+
+    document.getElementById('save-sub-video').addEventListener('click', async () => {
+        const btn = document.getElementById('save-sub-video');
+        btn.disabled = true;
+        const ok = await saveVideoData('sv', false, _editingParentId);
+        btn.disabled = false;
+        if (ok) { closeMgmtModal('modal-sub-video'); loadVideosMgmt(); }
+    });
+
+    let _editingFolderId = null;
+    let _editingFileId = null;
+    let _allFoldersMgmt = [];
+
+    async function loadMaterialsMgmt() {
+        const loading = document.getElementById('materials-mgmt-loading');
+        const list = document.getElementById('materials-mgmt-list');
+        loading.style.display = 'flex';
+        list.innerHTML = '';
+
+        const [foldersRes, filesRes] = await Promise.all([
+            supabase.from('folders').select('*, access_levels(name)').order('created_at', { ascending: false }),
+            supabase.from('files').select('*, access_levels(name), folders(name)').order('order_files', { ascending: true, nullsFirst: false })
+        ]);
+
+        _allFoldersMgmt = foldersRes.data || [];
+        const files = filesRes.data || [];
+        loading.style.display = 'none';
+
+        if (_allFoldersMgmt.length === 0 && files.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>Nenhum material cadastrado.</p></div>';
+            return;
+        }
+
+        _allFoldersMgmt.forEach(folder => {
+            const folderFiles = files.filter(f => f.folder_id === folder.id);
+            const el = document.createElement('div');
+            el.className = 'mgmt-video-group';
+            el.innerHTML = `
+                <div class="mgmt-video-group-header">
+                    <div class="mgmt-video-info">
+                        <i class="fa-solid fa-folder" style="color: var(--primary); font-size: 1.2rem; flex-shrink:0;"></i>
+                        <div>
+                            <strong>${folder.name}</strong>
+                            <small>${folder.access_levels?.name || ''} · ${folderFiles.length} arquivo(s)</small>
+                        </div>
+                    </div>
+                    <div class="mgmt-actions">
+                        <button class="btn-icon" title="Adicionar arquivo" data-action="add-file-to-folder" data-folder-id="${folder.id}">
+                            <i class="fa-solid fa-file-circle-plus"></i>
+                        </button>
+                        <button class="btn-icon" title="Editar" data-action="edit-folder" data-id="${folder.id}">
+                            <i class="fa-solid fa-pen"></i>
+                        </button>
+                        <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-folder" data-id="${folder.id}" data-name="${folder.name}">
+                            <i class="fa-solid fa-trash"></i>
+                        </button>
+                    </div>
+                </div>
+            `;
+
+            if (folderFiles.length > 0) {
+                const subList = document.createElement('div');
+                subList.className = 'mgmt-sub-list';
+                folderFiles.forEach(file => {
+                    const fileEl = document.createElement('div');
+                    fileEl.className = 'mgmt-sub-item';
+                    fileEl.innerHTML = `
+                        <div class="mgmt-video-info">
+                            <div>${getFileIcon(file.name)}</div>
+                            <span>${file.name}</span>
+                        </div>
+                        <div class="mgmt-actions">
+                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    `;
+                    subList.appendChild(fileEl);
+                });
+                el.appendChild(subList);
+            }
+            list.appendChild(el);
+        });
+
+        const standalone = files.filter(f => !f.folder_id);
+        if (standalone.length > 0) {
+            const section = document.createElement('div');
+            section.innerHTML = `<div class="mgmt-section-label"><i class="fa-solid fa-file"></i> Arquivos Avulsos</div>`;
+            list.appendChild(section);
+
+            standalone.forEach(file => {
+                const el = document.createElement('div');
+                el.className = 'mgmt-video-group';
+                el.innerHTML = `
+                    <div class="mgmt-video-group-header">
+                        <div class="mgmt-video-info">
+                            <div>${getFileIcon(file.name)}</div>
+                            <div>
+                                <strong>${file.name}</strong>
+                                <small>${file.access_levels?.name || ''}</small>
+                            </div>
+                        </div>
+                        <div class="mgmt-actions">
+                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}">
+                                <i class="fa-solid fa-pen"></i>
+                            </button>
+                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}">
+                                <i class="fa-solid fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                `;
+                list.appendChild(el);
+            });
+        }
+
+        list.querySelectorAll('[data-action="edit-folder"]').forEach(btn => {
+            btn.addEventListener('click', () => openFolderMgmtModal(btn.dataset.id));
+        });
+        list.querySelectorAll('[data-action="delete-folder"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                confirmDelete(`Excluir pasta "${btn.dataset.name}"? Os arquivos dentro serão desvinculados (não excluídos).`, async () => {
+                    await supabase.from('files').update({ folder_id: null }).eq('folder_id', btn.dataset.id);
+                    await supabase.from('folders').delete().eq('id', btn.dataset.id);
+                    showToast('🗑️ Pasta excluída.'); loadMaterialsMgmt();
+                });
+            });
+        });
+        list.querySelectorAll('[data-action="add-file-to-folder"]').forEach(btn => {
+            btn.addEventListener('click', () => openFileMgmtModal(null, btn.dataset.folderId));
+        });
+        list.querySelectorAll('[data-action="edit-file"]').forEach(btn => {
+            btn.addEventListener('click', () => openFileMgmtModal(parseInt(btn.dataset.id)));
+        });
+        list.querySelectorAll('[data-action="delete-file"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                confirmDelete(`Excluir arquivo "${btn.dataset.name}"?`, async () => {
+                    await supabase.from('video_files').delete().eq('file_id', btn.dataset.id);
+                    await supabase.from('files').delete().eq('id', btn.dataset.id);
+                    showToast('🗑️ Arquivo excluído.'); loadMaterialsMgmt();
+                });
+            });
+        });
+    }
+
+    document.getElementById('btn-new-folder').addEventListener('click', () => openFolderMgmtModal(null));
+
+    async function openFolderMgmtModal(folderId) {
+        _editingFolderId = folderId;
+        document.getElementById('modal-folder-mgmt-title').textContent = folderId ? 'Editar Pasta' : 'Nova Pasta';
+        document.getElementById('fm-name').value = '';
+        document.getElementById('fm-description').value = '';
+        document.getElementById('fm-access-level').value = '1';
+        if (folderId) {
+            const { data } = await supabase.from('folders').select('*').eq('id', folderId).single();
+            if (data) {
+                document.getElementById('fm-name').value = data.name || '';
+                document.getElementById('fm-description').value = data.description || '';
+                document.getElementById('fm-access-level').value = data.access_level_id || '1';
+            }
+        }
+        openMgmtModal('modal-folder-mgmt');
+    }
+
+    document.getElementById('save-folder-mgmt').addEventListener('click', async () => {
+        const name = document.getElementById('fm-name').value.trim();
+        if (!name) { showToast('⚠️ Nome é obrigatório.'); return; }
+        const payload = {
+            name,
+            description: document.getElementById('fm-description').value.trim() || null,
+            access_level_id: parseInt(document.getElementById('fm-access-level').value)
+        };
+        const btn = document.getElementById('save-folder-mgmt');
+        btn.disabled = true;
+        if (_editingFolderId) {
+            await supabase.from('folders').update(payload).eq('id', _editingFolderId);
+        } else {
+            await supabase.from('folders').insert(payload);
+        }
+        btn.disabled = false;
+        showToast('✅ Pasta salva!');
+        closeMgmtModal('modal-folder-mgmt');
+        loadMaterialsMgmt();
+    });
+
+    document.getElementById('btn-new-standalone-file').addEventListener('click', () => openFileMgmtModal(null, null));
+
+    async function openFileMgmtModal(fileId, presetFolderId = null) {
+        _editingFileId = fileId;
+        document.getElementById('modal-file-mgmt-title').textContent = fileId ? 'Editar Arquivo' : 'Novo Arquivo';
+        ['file-mgmt-name', 'file-mgmt-description', 'file-mgmt-url', 'file-mgmt-order'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('file-mgmt-access-level').value = '1';
+        document.getElementById('file-mgmt-show').checked = true;
+
+        const folderSel = document.getElementById('file-mgmt-folder');
+        folderSel.innerHTML = '<option value="">Nenhuma (arquivo avulso)</option>';
+        _allFoldersMgmt.forEach(f => {
+            const opt = document.createElement('option');
+            opt.value = f.id;
+            opt.textContent = f.name;
+            folderSel.appendChild(opt);
+        });
+        if (presetFolderId) folderSel.value = presetFolderId;
+
+        if (fileId) {
+            const { data } = await supabase.from('files').select('*').eq('id', fileId).single();
+            if (data) {
+                document.getElementById('file-mgmt-name').value = data.name || '';
+                document.getElementById('file-mgmt-description').value = data.description || '';
+                document.getElementById('file-mgmt-url').value = data.file_url || '';
+                document.getElementById('file-mgmt-access-level').value = data.access_level_id || '1';
+                document.getElementById('file-mgmt-order').value = data.order_files ?? '';
+                document.getElementById('file-mgmt-show').checked = data.show_in_materials !== false;
+                folderSel.value = data.folder_id || '';
+            }
+        }
+        openMgmtModal('modal-file-mgmt');
+    }
+
+    document.getElementById('save-file-mgmt').addEventListener('click', async () => {
+        const name = document.getElementById('file-mgmt-name').value.trim();
+        const url = document.getElementById('file-mgmt-url').value.trim();
+        if (!name || !url) { showToast('⚠️ Nome e URL são obrigatórios.'); return; }
+        const payload = {
+            name,
+            description: document.getElementById('file-mgmt-description').value.trim() || null,
+            file_url: url,
+            access_level_id: parseInt(document.getElementById('file-mgmt-access-level').value),
+            folder_id: document.getElementById('file-mgmt-folder').value || null,
+            order_files: parseInt(document.getElementById('file-mgmt-order').value) || null,
+            show_in_materials: document.getElementById('file-mgmt-show').checked
+        };
+        const btn = document.getElementById('save-file-mgmt');
+        btn.disabled = true;
+        if (_editingFileId) {
+            await supabase.from('files').update(payload).eq('id', _editingFileId);
+        } else {
+            await supabase.from('files').insert(payload);
+        }
+        btn.disabled = false;
+        showToast('✅ Arquivo salvo!');
+        closeMgmtModal('modal-file-mgmt');
+        loadMaterialsMgmt();
+    });
+
+    let _editingUserId = null;
+
+    async function loadUsersMgmt() {
+        const loading = document.getElementById('users-mgmt-loading');
+        const list = document.getElementById('users-mgmt-list');
+        loading.style.display = 'flex';
+        list.innerHTML = '';
+
+        const [usersRes, accessRes] = await Promise.all([
+            supabase.from('users').select('*').order('full_name'),
+            supabase.from('user_access').select('user_id, access_level_id, access_levels(name)')
+        ]);
+
+        const users = usersRes.data || [];
+        const accessMap = {};
+        (accessRes.data || []).forEach(a => { accessMap[a.user_id] = a; });
+
+        loading.style.display = 'none';
+
+        if (users.length === 0) {
+            list.innerHTML = '<div class="empty-state"><p>Nenhum usuário cadastrado.</p></div>';
+            return;
+        }
+
+        const levelColors = { 1: 'level-psicologos', 2: 'level-admin', 3: 'level-dev' };
+
+        users.forEach(user => {
+            const acc = accessMap[user.id];
+            const levelName = acc?.access_levels?.name || 'Sem acesso';
+            const levelId = acc?.access_level_id || 0;
+            const displayName = user.full_name || user.name || 'Sem nome';
+
+            const el = document.createElement('div');
+            el.className = 'mgmt-user-row';
+            el.innerHTML = `
+                <div class="mgmt-user-avatar">${displayName.charAt(0).toUpperCase()}</div>
+                <div class="mgmt-user-info">
+                    <strong>${displayName}</strong>
+                    <small>${user.name || ''}</small>
+                </div>
+                <span class="user-level-badge ${levelColors[levelId] || ''}">${levelName}</span>
+                <div class="mgmt-actions">
+                    <button class="btn-icon" title="Editar" data-action="edit-user" data-id="${user.id}">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-user" data-id="${user.id}" data-name="${displayName}">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            `;
+            list.appendChild(el);
+        });
+
+        list.querySelectorAll('[data-action="edit-user"]').forEach(btn => {
+            btn.addEventListener('click', () => openUserMgmtModal(btn.dataset.id));
+        });
+        list.querySelectorAll('[data-action="delete-user"]').forEach(btn => {
+            btn.addEventListener('click', () => {
+                confirmDelete(`Excluir usuário "${btn.dataset.name}"? Progressos e acessos serão removidos.`, async () => {
+                    const uid = btn.dataset.id;
+                    await supabase.from('video_progress').delete().eq('user_id', uid);
+                    await supabase.from('user_activity_logs').delete().eq('user_id', uid);
+                    await supabase.from('user_access').delete().eq('user_id', uid);
+                    await supabase.from('users').delete().eq('id', uid);
+                    showToast('🗑️ Usuário removido.');
+                    loadUsersMgmt();
+                });
+            });
+        });
+    }
+
+    document.getElementById('btn-new-user').addEventListener('click', () => openUserMgmtModal(null));
+
+    async function openUserMgmtModal(userId) {
+        _editingUserId = userId;
+        document.getElementById('modal-user-mgmt-title').textContent = userId ? 'Editar Usuário' : 'Novo Usuário';
+        ['user-mgmt-fullname', 'user-mgmt-name', 'user-mgmt-email', 'user-mgmt-password'].forEach(id => {
+            document.getElementById(id).value = '';
+        });
+        document.getElementById('user-mgmt-access-level').value = '1';
+
+        const emailGroup = document.getElementById('user-email-group');
+        const pwHint = document.getElementById('user-password-hint');
+        const pwLabel = document.getElementById('user-password-label');
+
+        if (userId) {
+            emailGroup.style.display = 'none';
+            pwHint.style.display = 'block';
+            pwLabel.textContent = 'Nova Senha (opcional)';
+            const [userRes, accessRes] = await Promise.all([
+                supabase.from('users').select('*').eq('id', userId).single(),
+                supabase.from('user_access').select('access_level_id').eq('user_id', userId).maybeSingle()
+            ]);
+            if (userRes.data) {
+                document.getElementById('user-mgmt-fullname').value = userRes.data.full_name || '';
+                document.getElementById('user-mgmt-name').value = userRes.data.name || '';
+            }
+            if (accessRes.data) {
+                document.getElementById('user-mgmt-access-level').value = accessRes.data.access_level_id;
+            }
+        } else {
+            emailGroup.style.display = 'block';
+            pwHint.style.display = 'none';
+            pwLabel.textContent = 'Senha *';
+        }
+        openMgmtModal('modal-user-mgmt');
+    }
+
+    document.getElementById('save-user-mgmt').addEventListener('click', async () => {
+        const btn = document.getElementById('save-user-mgmt');
+        btn.disabled = true;
+        btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando...';
+
+        const fullName = document.getElementById('user-mgmt-fullname').value.trim();
+        const name = document.getElementById('user-mgmt-name').value.trim();
+        const accessLevel = parseInt(document.getElementById('user-mgmt-access-level').value);
+
+        if (!fullName) {
+            showToast('⚠️ Nome completo é obrigatório.');
+            btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';
+            return;
+        }
+
+        try {
+            if (_editingUserId) {
+                await supabase.from('users').update({
+                    full_name: fullName,
+                    name: name || fullName.split(' ')[0],
+                    updated_at: new Date().toISOString()
+                }).eq('id', _editingUserId);
+
+                const { data: existAccess } = await supabase.from('user_access').select('id').eq('user_id', _editingUserId).maybeSingle();
+                if (existAccess) {
+                    await supabase.from('user_access').update({ access_level_id: accessLevel }).eq('user_id', _editingUserId);
+                } else {
+                    await supabase.from('user_access').insert({ user_id: _editingUserId, access_level_id: accessLevel });
+                }
+                showToast('✅ Usuário atualizado!');
+            } else {
+                const email = document.getElementById('user-mgmt-email').value.trim();
+                const password = document.getElementById('user-mgmt-password').value;
+                if (!email || !password) { showToast('⚠️ Email e senha são obrigatórios.'); throw new Error('validation'); }
+                if (password.length < 6) { showToast('⚠️ Senha mínimo 6 caracteres.'); throw new Error('validation'); }
+
+                const { data: authData, error: authError } = await supabase.auth.signUp({
+                    email, password,
+                    options: { data: { full_name: fullName, name: name || fullName.split(' ')[0] } }
+                });
+                if (authError) throw authError;
+
+                const newId = authData.user.id;
+                await supabase.from('users').upsert({ id: newId, full_name: fullName, name: name || fullName.split(' ')[0] });
+                await supabase.from('user_access').insert({ user_id: newId, access_level_id: accessLevel });
+                showToast('✅ Usuário criado! Email de confirmação enviado.');
+            }
+            closeMgmtModal('modal-user-mgmt');
+            loadUsersMgmt();
+        } catch (err) {
+            if (err.message !== 'validation') showToast('❌ Erro: ' + (err.message || 'Tente novamente.'));
+        } finally {
+            btn.disabled = false;
+            btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';
+        }
+    });
 
     const style = document.createElement('style');
     style.textContent = `
