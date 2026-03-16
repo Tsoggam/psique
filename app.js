@@ -46,6 +46,13 @@
 
     document.getElementById('login-form').addEventListener('submit', handleLogin);
     document.getElementById('logout-btn').addEventListener('click', handleLogout);
+
+    document.getElementById('password').addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            document.getElementById('login-form').dispatchEvent(new Event('submit', { cancelable: true }));
+        }
+    });
     document.getElementById('close-modal-btn').addEventListener('click', closeVideoModal);
     document.getElementById('mark-complete-btn').addEventListener('click', markVideoComplete);
     document.getElementById('next-video-btn').addEventListener('click', playNextVideo);
@@ -100,12 +107,22 @@
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
 
-            await supabase
+            const { data: existing } = await supabase
                 .from('user_activity_logs')
-                .upsert({
-                    user_id: user.id,
-                    last_login: new Date().toISOString()
-                });
+                .select('id')
+                .eq('user_id', user.id)
+                .maybeSingle();
+
+            if (existing) {
+                await supabase
+                    .from('user_activity_logs')
+                    .update({ last_login: new Date().toISOString() })
+                    .eq('user_id', user.id);
+            } else {
+                await supabase
+                    .from('user_activity_logs')
+                    .insert({ user_id: user.id, last_login: new Date().toISOString() });
+            }
         } catch (error) {
             console.error('Erro ao registrar atividade:', error);
         }
@@ -169,6 +186,10 @@
 
             currentUserLevel = userAccess[0].access_level_id;
             const levelName = userAccess[0].access_levels.name;
+
+            if (currentUserLevel !== 3) {
+                initAntiInspect();
+            }
 
             const badge = document.getElementById('user-badge');
 
@@ -356,12 +377,29 @@
 
             const videoHierarchy = organizeVideoHierarchy(videos);
 
+            const multiLevel = accessLevelIds.length > 1 ||
+                [...new Set(videos.map(v => v.access_level_id))].length > 1;
+
+            let lastLevelId = null;
             let flatIndex = 0;
+
             videoHierarchy.forEach(videoGroup => {
                 const mainVideo = videoGroup.main;
 
                 if (mainVideo.parent_video_id) {
                     return;
+                }
+
+                if (multiLevel && mainVideo.access_level_id !== lastLevelId) {
+                    lastLevelId = mainVideo.access_level_id;
+                    const levelName = mainVideo.access_levels?.name || 'Geral';
+                    const header = document.createElement('div');
+                    header.className = 'level-section-header';
+                    header.innerHTML = `
+                        <span class="level-badge">${levelName}</span>
+                        <h3>${levelName}</h3>
+                    `;
+                    container.appendChild(header);
                 }
 
                 const isCompleted = completedVideoIds.includes(mainVideo.id);
@@ -479,23 +517,56 @@
             allFolders = folders || [];
             allFiles = files || [];
 
-            if (allFolders.length > 0) {
-                allFolders.forEach(folder => {
-                    const card = createFolderCard(folder);
-                    container.appendChild(card);
+            const allLevelIds = [...new Set([
+                ...allFolders.map(f => f.access_level_id),
+                ...allFiles.filter(f => !f.folder_id).map(f => f.access_level_id)
+            ])].filter(Boolean).sort();
+
+            const multiLevel = allLevelIds.length > 1;
+
+            if (multiLevel) {
+                allLevelIds.forEach(levelId => {
+                    const levelFolders = allFolders.filter(f => f.access_level_id === levelId);
+                    const levelStandaloneFiles = allFiles.filter(f => !f.folder_id && f.access_level_id === levelId);
+
+                    if (levelFolders.length === 0 && levelStandaloneFiles.length === 0) return;
+
+                    const levelName = (levelFolders[0] || levelStandaloneFiles[0])?.access_levels?.name || `Nível ${levelId}`;
+
+                    const header = document.createElement('div');
+                    header.className = 'level-section-header';
+                    header.innerHTML = `
+                        <span class="level-badge">${levelName}</span>
+                        <h3>${levelName}</h3>
+                    `;
+                    container.appendChild(header);
+
+                    levelFolders.forEach(folder => {
+                        container.appendChild(createFolderCard(folder));
+                    });
+                    levelStandaloneFiles.forEach(file => {
+                        container.appendChild(createFileCard(file));
+                    });
                 });
+            } else {
+                if (allFolders.length > 0) {
+                    allFolders.forEach(folder => {
+                        const card = createFolderCard(folder);
+                        container.appendChild(card);
+                    });
+                }
+
+                const standaloneFiles = allFiles.filter(f => !f.folder_id);
+                if (standaloneFiles.length > 0) {
+                    standaloneFiles.forEach(file => {
+                        const card = createFileCard(file);
+                        container.appendChild(card);
+                    });
+                }
             }
 
-            const standaloneFiles = allFiles.filter(f => !f.folder_id);
-
-            if (standaloneFiles.length > 0) {
-                standaloneFiles.forEach(file => {
-                    const card = createFileCard(file);
-                    container.appendChild(card);
-                });
-            }
-
-            if (allFolders.length === 0 && standaloneFiles.length === 0) {
+            const anyStandalone = allFiles.filter(f => !f.folder_id);
+            if (allFolders.length === 0 && anyStandalone.length === 0) {
                 noFiles.style.display = 'block';
                 return;
             }
@@ -1584,8 +1655,6 @@
         return true;
     }
 
-    initAntiInspect();
-
     document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.addEventListener('click', () => {
             const target = tab.dataset.adminTab;
@@ -1646,10 +1715,16 @@
         loading.style.display = 'flex';
         list.innerHTML = '';
 
-        const { data: videos } = await supabase
+        const { data: videos, error: vErr } = await supabase
             .from('videos')
             .select('*, access_levels(name)')
             .order('order_index', { ascending: true });
+
+        if (vErr) {
+            showToast('❌ Erro ao carregar vídeos: ' + vErr.message);
+            loading.style.display = 'none';
+            return;
+        }
 
         loading.style.display = 'none';
 
@@ -1660,14 +1735,21 @@
 
         const hierarchy = organizeVideoHierarchy(videos);
 
+        const hint = document.createElement('div');
+        hint.className = 'drag-hint';
+        hint.innerHTML = '<i class="fa-solid fa-up-down"></i> Arraste os grupos para reordenar';
+        list.appendChild(hint);
+
         hierarchy.forEach(group => {
             const groupEl = document.createElement('div');
-            groupEl.className = 'mgmt-video-group';
+            groupEl.className = 'mgmt-video-group draggable-group';
+            groupEl.dataset.videoId = group.main.id;
 
             const main = group.main;
             groupEl.innerHTML = `
                 <div class="mgmt-video-group-header">
                     <div class="mgmt-video-info">
+                        <span class="drag-handle" title="Arraste para reordenar"><i class="fa-solid fa-grip-vertical"></i></span>
                         <span class="mgmt-section-badge">${main.section_number || main.order_index || '—'}</span>
                         <div>
                             <strong>${main.title}</strong>
@@ -1716,6 +1798,8 @@
             list.appendChild(groupEl);
         });
 
+        initVideoDragAndDrop(list);
+
         list.querySelectorAll('[data-action="add-sub"]').forEach(btn => {
             btn.addEventListener('click', () => openSubVideoModal(null, parseInt(btn.dataset.id)));
         });
@@ -1730,6 +1814,42 @@
                 });
             });
         });
+    }
+
+    function initVideoDragAndDrop(list) {
+        if (typeof Sortable === 'undefined') {
+            console.warn('SortableJS não carregado, drag desabilitado');
+            return;
+        }
+        Sortable.create(list, {
+            animation: 150,
+            handle: '.drag-handle',
+            ghostClass: 'drag-over',
+            dragClass: 'dragging',
+            filter: '.drag-hint',
+            onEnd: async () => {
+                await saveVideoOrder(list);
+            }
+        });
+    }
+
+    async function saveVideoOrder(list) {
+        const groups = [...list.querySelectorAll('.draggable-group')];
+        const updates = groups.map((el, idx) => ({
+            id: parseInt(el.dataset.videoId),
+            order_index: idx
+        }));
+
+        const promises = updates.map(u =>
+            supabase.from('videos').update({ order_index: u.order_index }).eq('id', u.id)
+        );
+        const results = await Promise.all(promises);
+        const errs = results.filter(r => r.error);
+        if (errs.length > 0) {
+            showToast('❌ Erro ao salvar ordem: ' + errs[0].error.message);
+        } else {
+            showToast('✅ Ordem salva!');
+        }
     }
 
     async function deleteVideo(videoId) {
@@ -1751,6 +1871,75 @@
         const { data } = await supabase.from('files').select('id, name').order('name');
         _allFilesForPicker = data || [];
     }
+
+    let _thumbnailPickerTarget = null;
+
+    async function openThumbnailPicker(prefix) {
+        _thumbnailPickerTarget = prefix;
+        const loading = document.getElementById('thumbnail-picker-loading');
+        const grid = document.getElementById('thumbnail-picker-grid');
+        const empty = document.getElementById('thumbnail-picker-empty');
+
+        grid.innerHTML = '';
+        empty.style.display = 'none';
+        loading.style.display = 'flex';
+        openMgmtModal('modal-thumbnail-picker');
+
+        try {
+            const { data: files, error } = await supabase.storage
+                .from('thumbnail')
+                .list('', { limit: 200, offset: 0 });
+
+            loading.style.display = 'none';
+
+            if (error) throw error;
+
+            const images = (files || []).filter(f => f.name && /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name));
+
+            if (images.length === 0) {
+                empty.style.display = 'block';
+                return;
+            }
+
+            images.forEach(file => {
+                const { data: urlData } = supabase.storage.from('thumbnail').getPublicUrl(file.name);
+                const url = urlData?.publicUrl;
+                if (!url) return;
+
+                const div = document.createElement('div');
+                div.className = 'thumbnail-option';
+                div.title = file.name;
+                div.innerHTML = `<img src="${url}" alt="${file.name}" loading="lazy">`;
+                div.addEventListener('click', () => {
+                    selectThumbnail(url, prefix);
+                    closeMgmtModal('modal-thumbnail-picker');
+                });
+                grid.appendChild(div);
+            });
+        } catch (err) {
+            loading.style.display = 'none';
+            empty.style.display = 'block';
+            console.error('Erro ao listar bucket thumbnail:', err);
+            showToast('❌ Erro ao acessar bucket: ' + err.message);
+        }
+    }
+
+    function selectThumbnail(url, prefix) {
+        document.getElementById(`${prefix}-thumbnail`).value = url;
+        const img = document.getElementById(`${prefix}-thumbnail-img`);
+        const placeholder = document.getElementById(`${prefix}-thumbnail-placeholder`);
+        if (img) {
+            img.src = url;
+            img.style.display = 'block';
+        }
+        if (placeholder) placeholder.style.display = 'none';
+    }
+
+    document.getElementById('btn-pick-vg-thumbnail')?.addEventListener('click', () => openThumbnailPicker('vg'));
+    document.getElementById('btn-pick-sv-thumbnail')?.addEventListener('click', () => openThumbnailPicker('sv'));
+    document.getElementById('close-modal-thumbnail-picker')?.addEventListener('click', () => closeMgmtModal('modal-thumbnail-picker'));
+    document.getElementById('backdrop-thumbnail-picker')?.addEventListener('click', () => closeMgmtModal('modal-thumbnail-picker'));
+    document.getElementById('cancel-thumbnail-picker')?.addEventListener('click', () => closeMgmtModal('modal-thumbnail-picker'));
 
     async function getVideoLinkedFiles(videoId) {
         const { data } = await supabase
@@ -1803,9 +1992,15 @@
         _editingVideoId = null;
         _vgLinkedFiles = [];
         document.getElementById('modal-video-group-title').textContent = 'Novo Grupo de Vídeos';
-        ['vg-title', 'vg-description', 'vg-url', 'vg-thumbnail', 'vg-section', 'vg-order'].forEach(id => {
+        ['vg-title', 'vg-description', 'vg-url', 'vg-section', 'vg-order'].forEach(id => {
             document.getElementById(id).value = '';
         });
+        document.getElementById('vg-thumbnail').value = '';
+        const vgImg = document.getElementById('vg-thumbnail-img');
+        const vgPlaceholder = document.getElementById('vg-thumbnail-placeholder');
+        if (vgImg) { vgImg.src = ''; vgImg.style.display = 'none'; }
+        if (vgPlaceholder) vgPlaceholder.style.display = 'inline';
+
         document.getElementById('vg-unlocked').checked = false;
         document.getElementById('vg-access-level').value = '1';
         renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
@@ -1833,7 +2028,15 @@
         document.getElementById(`${prefix}-title`).value = video.title || '';
         document.getElementById(`${prefix}-description`).value = video.description || '';
         document.getElementById(`${prefix}-url`).value = video.video_url || '';
-        document.getElementById(`${prefix}-thumbnail`).value = video.thumbnail_url || '';
+        const thumbUrl = video.thumbnail_url || '';
+        document.getElementById(`${prefix}-thumbnail`).value = thumbUrl;
+        const thumbImg = document.getElementById(`${prefix}-thumbnail-img`);
+        const thumbPlaceholder = document.getElementById(`${prefix}-thumbnail-placeholder`);
+        if (thumbImg) {
+            thumbImg.src = thumbUrl;
+            thumbImg.style.display = thumbUrl ? 'block' : 'none';
+        }
+        if (thumbPlaceholder) thumbPlaceholder.style.display = thumbUrl ? 'none' : 'inline';
         document.getElementById(`${prefix}-section`).value = video.section_number || '';
         document.getElementById(`${prefix}-order`).value = video.order_index ?? '';
         document.getElementById(`${prefix}-unlocked`).checked = !!video.unlocked;
@@ -1856,11 +2059,14 @@
         const url = document.getElementById(`${prefix}-url`).value.trim();
         if (!title || !url) { showToast('⚠️ Título e URL são obrigatórios.'); return false; }
 
+        const thumbEl = document.getElementById(`${prefix}-thumbnail`);
+        const thumbnailUrl = thumbEl ? (thumbEl.value.trim() || null) : null;
+
         const payload = {
             title,
             description: document.getElementById(`${prefix}-description`).value.trim() || null,
             video_url: url,
-            thumbnail_url: document.getElementById(`${prefix}-thumbnail`).value.trim() || null,
+            thumbnail_url: thumbnailUrl,
             section_number: document.getElementById(`${prefix}-section`).value.trim() || null,
             order_index: parseInt(document.getElementById(`${prefix}-order`).value) || 0,
             unlocked: document.getElementById(`${prefix}-unlocked`).checked,
@@ -1870,30 +2076,41 @@
             payload.access_level_id = parseInt(document.getElementById('vg-access-level').value);
             payload.parent_video_id = null;
         } else {
-            payload.parent_video_id = parentId;
-            const { data: parent } = await supabase.from('videos').select('access_level_id').eq('id', parentId).single();
+            payload.parent_video_id = parseInt(parentId);
+            const { data: parent } = await supabase.from('videos').select('access_level_id').eq('id', parseInt(parentId)).single();
             payload.access_level_id = parent?.access_level_id || 1;
         }
 
         let videoId = _editingVideoId;
-        if (videoId) {
-            const { error } = await supabase.from('videos').update(payload).eq('id', videoId);
-            if (error) { showToast('❌ Erro: ' + error.message); return false; }
-        } else {
-            const { data, error } = await supabase.from('videos').insert(payload).select('id').single();
-            if (error) { showToast('❌ Erro: ' + error.message); return false; }
-            videoId = data.id;
+        try {
+            if (videoId) {
+                const { error } = await supabase.from('videos').update(payload).eq('id', videoId);
+                if (error) throw error;
+            } else {
+                const { data, error } = await supabase.from('videos').insert(payload).select('id').single();
+                if (error) throw error;
+                videoId = data.id;
+            }
+        } catch (err) {
+            showToast('❌ Erro ao salvar vídeo: ' + (err.message || 'Verifique as permissões no Supabase.'));
+            console.error('saveVideoData error:', err);
+            return false;
         }
 
         await supabase.from('video_files').delete().eq('video_id', videoId);
         const linkedFiles = isGroup ? _vgLinkedFiles : _svLinkedFiles;
-        const validFiles = linkedFiles.filter(lf => lf.file_id);
+        const validFiles = linkedFiles.filter(lf => lf.file_id && parseInt(lf.file_id) > 0);
         if (validFiles.length > 0) {
-            await supabase.from('video_files').insert(validFiles.map(lf => ({
+            const { error: vfError } = await supabase.from('video_files').insert(validFiles.map((lf, idx) => ({
                 video_id: videoId,
-                file_id: lf.file_id,
-                display_order: lf.display_order
+                file_id: parseInt(lf.file_id),
+                display_order: lf.display_order || (idx + 1)
             })));
+            if (vfError) {
+                console.error('Erro ao vincular arquivos:', vfError);
+                showToast('⚠️ Vídeo salvo, mas houve erro ao vincular arquivos: ' + vfError.message);
+                return true;
+            }
         }
 
         showToast('✅ Vídeo salvo!');
@@ -1914,9 +2131,15 @@
         _editingParentId = parentId;
         _svLinkedFiles = videoId ? await getVideoLinkedFiles(videoId) : [];
         document.getElementById('modal-sub-video-title').textContent = videoId ? 'Editar Sub-Vídeo' : 'Novo Sub-Vídeo';
-        ['sv-title', 'sv-description', 'sv-url', 'sv-thumbnail', 'sv-section', 'sv-order'].forEach(id => {
+        ['sv-title', 'sv-description', 'sv-url', 'sv-section', 'sv-order'].forEach(id => {
             document.getElementById(id).value = '';
         });
+        document.getElementById('sv-thumbnail').value = '';
+        const svImg = document.getElementById('sv-thumbnail-img');
+        const svPlaceholder = document.getElementById('sv-thumbnail-placeholder');
+        if (svImg) { svImg.src = ''; svImg.style.display = 'none'; }
+        if (svPlaceholder) svPlaceholder.style.display = 'inline';
+
         document.getElementById('sv-unlocked').checked = false;
 
         if (videoId) {
@@ -1925,7 +2148,10 @@
                 document.getElementById('sv-title').value = v.title || '';
                 document.getElementById('sv-description').value = v.description || '';
                 document.getElementById('sv-url').value = v.video_url || '';
-                document.getElementById('sv-thumbnail').value = v.thumbnail_url || '';
+                const svThumbUrl = v.thumbnail_url || '';
+                document.getElementById('sv-thumbnail').value = svThumbUrl;
+                if (svImg) { svImg.src = svThumbUrl; svImg.style.display = svThumbUrl ? 'block' : 'none'; }
+                if (svPlaceholder) svPlaceholder.style.display = svThumbUrl ? 'none' : 'inline';
                 document.getElementById('sv-section').value = v.section_number || '';
                 document.getElementById('sv-order').value = v.order_index ?? '';
                 document.getElementById('sv-unlocked').checked = !!v.unlocked;
@@ -2247,13 +2473,18 @@
         });
         list.querySelectorAll('[data-action="delete-user"]').forEach(btn => {
             btn.addEventListener('click', () => {
-                confirmDelete(`Excluir usuário "${btn.dataset.name}"? Progressos e acessos serão removidos.`, async () => {
+                confirmDelete(`Excluir usuário "${btn.dataset.name}"? Progressos e acessos serão removidos.\n⚠️ A conta de autenticação deve ser removida manualmente no painel Supabase > Authentication.`, async () => {
                     const uid = btn.dataset.id;
-                    await supabase.from('video_progress').delete().eq('user_id', uid);
-                    await supabase.from('user_activity_logs').delete().eq('user_id', uid);
-                    await supabase.from('user_access').delete().eq('user_id', uid);
-                    await supabase.from('users').delete().eq('id', uid);
-                    showToast('🗑️ Usuário removido.');
+                    try {
+                        await supabase.from('video_progress').delete().eq('user_id', uid);
+                        await supabase.from('user_activity_logs').delete().eq('user_id', uid);
+                        await supabase.from('user_access').delete().eq('user_id', uid);
+                        const { error } = await supabase.from('users').delete().eq('id', uid);
+                        if (error) throw error;
+                        showToast('🗑️ Usuário removido dos registros. Remova a conta auth no painel Supabase.');
+                    } catch (err) {
+                        showToast('❌ Erro ao excluir: ' + err.message);
+                    }
                     loadUsersMgmt();
                 });
             });
@@ -2314,17 +2545,20 @@
 
         try {
             if (_editingUserId) {
-                await supabase.from('users').update({
+                const { error: userErr } = await supabase.from('users').update({
                     full_name: fullName,
                     name: name || fullName.split(' ')[0],
-                    updated_at: new Date().toISOString()
                 }).eq('id', _editingUserId);
+
+                if (userErr) throw userErr;
 
                 const { data: existAccess } = await supabase.from('user_access').select('id').eq('user_id', _editingUserId).maybeSingle();
                 if (existAccess) {
-                    await supabase.from('user_access').update({ access_level_id: accessLevel }).eq('user_id', _editingUserId);
+                    const { error: accErr } = await supabase.from('user_access').update({ access_level_id: accessLevel }).eq('user_id', _editingUserId);
+                    if (accErr) throw accErr;
                 } else {
-                    await supabase.from('user_access').insert({ user_id: _editingUserId, access_level_id: accessLevel });
+                    const { error: accErr } = await supabase.from('user_access').insert({ user_id: _editingUserId, access_level_id: accessLevel });
+                    if (accErr) throw accErr;
                 }
                 showToast('✅ Usuário atualizado!');
             } else {
@@ -2332,22 +2566,53 @@
                 const password = document.getElementById('user-mgmt-password').value;
                 if (!email || !password) { showToast('⚠️ Email e senha são obrigatórios.'); throw new Error('validation'); }
                 if (password.length < 6) { showToast('⚠️ Senha mínimo 6 caracteres.'); throw new Error('validation'); }
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+                    showToast('⚠️ Email inválido. Use o formato: nome@dominio.com'); throw new Error('validation');
+                }
 
                 const { data: authData, error: authError } = await supabase.auth.signUp({
-                    email, password,
-                    options: { data: { full_name: fullName, name: name || fullName.split(' ')[0] } }
+                    email,
+                    password,
+                    options: {
+                        data: { full_name: fullName, name: name || fullName.split(' ')[0] },
+                        emailRedirectTo: undefined
+                    }
                 });
+
                 if (authError) throw authError;
 
+                if (!authData?.user?.id) {
+                    throw new Error('Não foi possível criar o usuário. Verifique se o email já está cadastrado ou se a confirmação de email está desativada no Supabase.');
+                }
+
                 const newId = authData.user.id;
-                await supabase.from('users').upsert({ id: newId, full_name: fullName, name: name || fullName.split(' ')[0] });
-                await supabase.from('user_access').insert({ user_id: newId, access_level_id: accessLevel });
-                showToast('✅ Usuário criado! Email de confirmação enviado.');
+
+                const { error: insertErr } = await supabase.from('users').upsert({
+                    id: newId,
+                    full_name: fullName,
+                    name: name || fullName.split(' ')[0]
+                }, { onConflict: 'id' });
+                if (insertErr) throw insertErr;
+
+                const { error: accessErr } = await supabase.from('user_access').insert({
+                    user_id: newId,
+                    access_level_id: accessLevel
+                });
+                if (accessErr) throw accessErr;
+
+                const needsConfirm = !authData.session;
+                showToast(needsConfirm
+                    ? '✅ Usuário criado! O usuário deve confirmar o email antes de fazer login.'
+                    : '✅ Usuário criado e ativo!'
+                );
             }
             closeMgmtModal('modal-user-mgmt');
             loadUsersMgmt();
         } catch (err) {
-            if (err.message !== 'validation') showToast('❌ Erro: ' + (err.message || 'Tente novamente.'));
+            if (err.message !== 'validation') {
+                console.error('Erro ao salvar usuário:', err);
+                showToast('❌ ' + (err.message || 'Erro desconhecido. Verifique o console.'));
+            }
         } finally {
             btn.disabled = false;
             btn.innerHTML = '<i class="fa-solid fa-floppy-disk"></i> Salvar';

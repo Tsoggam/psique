@@ -27,12 +27,14 @@
                 <form id="login-form">
                     <div class="input-group">
                         <label for="email">Email</label>
-                        <input type="email" id="email" placeholder="seu@email.com" required>
+                        <input type="email" id="email" placeholder="seu@email.com" required maxlength="254"
+                            autocomplete="email">
                     </div>
 
                     <div class="input-group">
                         <label for="password">Senha</label>
-                        <input type="password" id="password" placeholder="••••••••" required>
+                        <input type="password" id="password" placeholder="••••••••" required
+                            autocomplete="current-password">
                     </div>
 
                     <button type="submit" class="btn btn-primary">
@@ -90,7 +92,6 @@
                 </div>
             </div>
 
-            <!-- ===== TAB: DASHBOARD ===== -->
             <div class="admin-tab-content active" id="tab-dashboard">
                 <div class="container">
                     <div class="welcome-section">
@@ -166,7 +167,6 @@
                 </div>
             </div>
 
-            <!-- ===== TAB: VIDEOS MGMT ===== -->
             <div class="admin-tab-content" id="tab-videos-mgmt">
                 <div class="container">
                     <div class="mgmt-header">
@@ -183,7 +183,6 @@
                 </div>
             </div>
 
-            <!-- ===== TAB: MATERIALS MGMT ===== -->
             <div class="admin-tab-content" id="tab-materials-mgmt">
                 <div class="container">
                     <div class="mgmt-header">
@@ -205,7 +204,6 @@
                 </div>
             </div>
 
-            <!-- ===== TAB: USERS MGMT ===== -->
             <div class="admin-tab-content" id="tab-users-mgmt">
                 <div class="container">
                     <div class="mgmt-header">
@@ -224,7 +222,6 @@
 
         </div>
 
-        <!-- ===== MODAL: VIDEO GROUP ===== -->
         <div id="modal-video-group" class="modal">
             <div class="modal-backdrop" id="backdrop-video-group"></div>
             <div class="mgmt-modal-content">
@@ -247,8 +244,19 @@
                             <input type="text" id="vg-url" placeholder="YouTube, Vimeo, Google Drive...">
                         </div>
                         <div class="form-group">
-                            <label>URL da Thumbnail</label>
-                            <input type="text" id="vg-thumbnail" placeholder="https://...">
+                            <label>Thumbnail</label>
+                            <div class="thumbnail-picker" id="vg-thumbnail-picker">
+                                <div class="thumbnail-preview" id="vg-thumbnail-preview">
+                                    <img id="vg-thumbnail-img" src="" alt=""
+                                        style="display:none;max-height:80px;border-radius:6px;">
+                                    <span id="vg-thumbnail-placeholder"><i class="fa-solid fa-image"></i> Nenhuma
+                                        selecionada</span>
+                                </div>
+                                <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-vg-thumbnail">
+                                    <i class="fa-solid fa-images"></i> Selecionar do bucket
+                                </button>
+                                <input type="hidden" id="vg-thumbnail">
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -292,7 +300,6 @@
             </div>
         </div>
 
-        <!-- ===== MODAL: SUB VIDEO ===== -->
         <div id="modal-sub-video" class="modal">
             <div class="modal-backdrop" id="backdrop-sub-video"></div>
             <div class="mgmt-modal-content">
@@ -315,8 +322,19 @@
                             <input type="text" id="sv-url" placeholder="YouTube, Vimeo, Google Drive...">
                         </div>
                         <div class="form-group">
-                            <label>URL da Thumbnail</label>
-                            <input type="text" id="sv-thumbnail" placeholder="https://...">
+                            <label>Thumbnail</label>
+                            <div class="thumbnail-picker" id="sv-thumbnail-picker">
+                                <div class="thumbnail-preview" id="sv-thumbnail-preview">
+                                    <img id="sv-thumbnail-img" src="" alt=""
+                                        style="display:none;max-height:80px;border-radius:6px;">
+                                    <span id="sv-thumbnail-placeholder"><i class="fa-solid fa-image"></i> Nenhuma
+                                        selecionada</span>
+                                </div>
+                                <button type="button" class="btn btn-ghost btn-sm" id="btn-pick-sv-thumbnail">
+                                    <i class="fa-solid fa-images"></i> Selecionar do bucket
+                                </button>
+                                <input type="hidden" id="sv-thumbnail">
+                            </div>
                         </div>
                     </div>
                     <div class="form-row">
@@ -353,7 +371,6 @@
             </div>
         </div>
 
-        <!-- ===== MODAL: FOLDER ===== -->
         <div id="modal-folder-mgmt" class="modal">
             <div class="modal-backdrop" id="backdrop-folder-mgmt"></div>
             <div class="mgmt-modal-content">
@@ -387,7 +404,6 @@
             </div>
         </div>
 
-        <!-- ===== MODAL: FILE ===== -->
         <div id="modal-file-mgmt" class="modal">
             <div class="modal-backdrop" id="backdrop-file-mgmt"></div>
             <div class="mgmt-modal-content">
@@ -443,7 +459,6 @@
             </div>
         </div>
 
-        <!-- ===== MODAL: USER ===== -->
         <div id="modal-user-mgmt" class="modal">
             <div class="modal-backdrop" id="backdrop-user-mgmt"></div>
             <div class="mgmt-modal-content">
@@ -493,7 +508,6 @@
             </div>
         </div>
 
-        <!-- ===== MODAL: CONFIRM DELETE ===== -->
         <div id="modal-confirm-delete" class="modal">
             <div class="modal-backdrop" id="backdrop-confirm-delete"></div>
             <div class="mgmt-modal-content mgmt-modal-small">
@@ -695,6 +709,30 @@
         </div>
     </div>
 
+    <div id="modal-thumbnail-picker" class="modal">
+        <div class="modal-backdrop" id="backdrop-thumbnail-picker"></div>
+        <div class="mgmt-modal-content mgmt-modal-large">
+            <div class="mgmt-modal-header">
+                <h3><i class="fa-solid fa-images"></i> Selecionar Thumbnail</h3>
+                <button class="close-modal" id="close-modal-thumbnail-picker"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div class="mgmt-modal-body">
+                <div id="thumbnail-picker-loading" class="loading" style="display:none;">
+                    <div class="spinner"></div>
+                    <p>Carregando imagens...</p>
+                </div>
+                <div id="thumbnail-picker-grid" class="thumbnail-grid"></div>
+                <div id="thumbnail-picker-empty" class="empty-state" style="display:none;">
+                    <i class="fa-solid fa-images empty-icon"></i>
+                    <p>Nenhuma imagem encontrada no bucket "thumbnail"</p>
+                </div>
+            </div>
+            <div class="mgmt-modal-footer">
+                <button class="btn btn-ghost" id="cancel-thumbnail-picker">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
     <script>
@@ -702,6 +740,7 @@
         const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqZWl2Zmx3dWxxdGxrd3Z2bXZ3Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjMzOTQyNjAsImV4cCI6MjA3ODk3MDI2MH0.HihY01IpWvJm1nT0fcmcfnpMxa1NMtkw73xvnBEzvm4';
     </script>
 
+    <script src="https://cdn.jsdelivr.net/npm/sortablejs@1.15.2/Sortable.min.js"></script>
     <script src="app.js"></script>
 </body>
 
