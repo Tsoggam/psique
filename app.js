@@ -19,6 +19,7 @@
     let currentFolder = null;
     let allFolders = [];
     let allFiles = [];
+    let currentAccessLevelIds = [];
 
     const themeToggle = document.getElementById('theme-toggle');
     const savedTheme = localStorage.getItem('theme') || 'light';
@@ -86,15 +87,9 @@
         errorDiv.textContent = '';
 
         try {
-            const { data, error } = await supabase.auth.signInWithPassword({
-                email: email,
-                password: password
-            });
-
+            const { data, error } = await supabase.auth.signInWithPassword({ email, password });
             if (error) throw error;
-
             await showMemberScreen();
-
         } catch (error) {
             errorDiv.textContent = 'Email ou senha incorretos. Tente novamente.';
             errorDiv.classList.add('show');
@@ -106,23 +101,12 @@
         try {
             const { data: { user } } = await supabase.auth.getUser();
             if (!user) return;
-
-            const { data: existing } = await supabase
+            await supabase
                 .from('user_activity_logs')
-                .select('id')
-                .eq('user_id', user.id)
-                .maybeSingle();
-
-            if (existing) {
-                await supabase
-                    .from('user_activity_logs')
-                    .update({ last_login: new Date().toISOString() })
-                    .eq('user_id', user.id);
-            } else {
-                await supabase
-                    .from('user_activity_logs')
-                    .insert({ user_id: user.id, last_login: new Date().toISOString() });
-            }
+                .upsert(
+                    { user_id: user.id, last_login: new Date().toISOString() },
+                    { onConflict: 'user_id' }
+                );
         } catch (error) {
             console.error('Erro ao registrar atividade:', error);
         }
@@ -144,7 +128,6 @@
             if (!user) throw new Error('Usuário não encontrado');
 
             currentUser = user;
-
             await logUserActivity();
 
             const { data: userProfile } = await supabase
@@ -153,43 +136,26 @@
                 .eq('id', user.id)
                 .single();
 
-            let displayName = '';
-            if (userProfile?.full_name) {
-                displayName = userProfile.full_name;
-            } else if (userProfile?.name) {
-                displayName = userProfile.name;
-            } else if (user.user_metadata?.full_name) {
-                displayName = user.user_metadata.full_name;
-            } else if (user.user_metadata?.name) {
-                displayName = user.user_metadata.name;
-            } else {
-                displayName = user.email.split('@')[0];
-            }
+            let displayName = userProfile?.full_name || userProfile?.name
+                || user.user_metadata?.full_name || user.user_metadata?.name
+                || user.email.split('@')[0];
 
-            const capitalizeFirstLetter = (str) => {
-                return str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
-            };
-
-            const welcomeMessage = document.getElementById('welcome-message');
+            const capitalizeFirstLetter = (str) => str.charAt(0).toUpperCase() + str.slice(1).toLowerCase();
             const firstName = displayName.split(' ')[0];
             const formattedName = capitalizeFirstLetter(firstName);
-            welcomeMessage.textContent = `Bem-vindo(a), ${formattedName}! 😊`;
+            document.getElementById('welcome-message').textContent = `Bem-vindo(a), ${formattedName}! 😊`;
 
             const { data: userAccess } = await supabase
                 .from('user_access')
                 .select('access_level_id, access_levels(name)')
                 .eq('user_id', user.id);
 
-            if (!userAccess || userAccess.length === 0) {
-                throw new Error('Sem permissões de acesso');
-            }
+            if (!userAccess || userAccess.length === 0) throw new Error('Sem permissões de acesso');
 
+            currentAccessLevelIds = userAccess.map(a => a.access_level_id);
             currentUserLevel = userAccess[0].access_level_id;
-            const levelName = userAccess[0].access_levels.name;
 
-            if (currentUserLevel !== 3) {
-                initAntiInspect();
-            }
+            if (currentUserLevel !== 3) initAntiInspect();
 
             const badge = document.getElementById('user-badge');
 
@@ -197,15 +163,12 @@
                 badge.innerHTML = 'Psicólogos';
                 document.getElementById('admin-panel').style.display = 'none';
                 document.querySelector('.container').style.display = 'block';
-            }
-            else if (currentUserLevel === 2) {
+            } else if (currentUserLevel === 2) {
                 badge.innerHTML = 'Administrativo';
                 document.getElementById('admin-panel').style.display = 'none';
                 document.querySelector('.container').style.display = 'block';
-            }
-            else if (currentUserLevel === 3) {
+            } else if (currentUserLevel === 3) {
                 badge.innerHTML = 'Desenvolvedor';
-
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('member-screen').classList.add('active');
 
@@ -218,11 +181,9 @@
                     adminPanel.style.visibility = 'visible';
                     adminPanel.style.opacity = '1';
                 }
-
                 await loadAdminDashboard();
                 return;
-            }
-            else {
+            } else {
                 badge.innerHTML = '<i class="fa-solid fa-exclamation"></i>';
             }
 
@@ -239,90 +200,13 @@
         }
     }
 
-
-    async function loadVideoFiles(videoId) {
-        const container = document.getElementById('video-files-container');
-
-        try {
-            const { data: videoFiles, error } = await supabase
-                .from('video_files')
-                .select(`
-                file_id,
-                display_order,
-                files (
-                    id,
-                    name,
-                    description,
-                    file_url
-                )
-            `)
-                .eq('video_id', videoId)
-                .order('display_order', { ascending: true });
-
-            if (error) throw error;
-
-            container.innerHTML = '';
-
-            if (!videoFiles || videoFiles.length === 0) {
-                container.style.display = 'none';
-                return;
-            }
-
-            container.style.display = 'block';
-
-            const header = document.createElement('div');
-            header.className = 'video-files-header';
-            header.innerHTML = `
-            <h3>
-        <i class="fa-solid fa-file-arrow-down"></i>
-            </h3>
-            <span class="files-count">${videoFiles.length} ${videoFiles.length === 1 ? 'arquivo' : 'arquivos'}</span>
-        `;
-            container.appendChild(header);
-
-            const filesList = document.createElement('div');
-            filesList.className = 'video-files-list';
-
-            videoFiles.forEach(vf => {
-                const file = vf.files;
-                if (!file) return;
-
-                const fileCard = document.createElement('div');
-                fileCard.className = 'video-file-item';
-
-                const icon = getFileIcon(file.name);
-
-                fileCard.innerHTML = `
-                <div class="video-file-icon">${icon}</div>
-                <div class="video-file-info">
-                    <h4>${file.name}</h4>
-                    ${file.description ? `<p>${file.description}</p>` : ''}
-                </div>
-                <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn-download" title="Baixar arquivo">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                        <polyline points="7 10 12 15 17 10"></polyline>
-                        <line x1="12" y1="15" x2="12" y2="3"></line>
-                    </svg>
-                    <span>Baixar</span>
-                </button>
-            `;
-
-                filesList.appendChild(fileCard);
-            });
-
-            container.appendChild(filesList);
-
-        } catch (error) {
-            console.error('Erro ao carregar arquivos do vídeo:', error);
-            container.style.display = 'none';
-        }
+    function getLevelLabel(levelId) {
+        const labels = { 1: 'Psicólogos', 2: 'Administrativo', 3: 'Desenvolvedor' };
+        return labels[levelId] || `Nível ${levelId}`;
     }
 
     async function loadVideos() {
-        if (isLoadingVideos) {
-            return;
-        }
+        if (isLoadingVideos) return;
         isLoadingVideos = true;
 
         const loading = document.getElementById('videos-loading');
@@ -334,25 +218,17 @@
         noVideos.style.display = 'none';
 
         try {
-            const { data: userAccess } = await supabase
-                .from('user_access')
-                .select('access_level_id')
-                .eq('user_id', currentUser.id);
+            const accessLevelIds = currentAccessLevelIds;
 
-            if (!userAccess || userAccess.length === 0) {
+            if (!accessLevelIds.length) {
                 loading.style.display = 'none';
                 noVideos.style.display = 'block';
                 return;
             }
 
-            const accessLevelIds = userAccess.map(a => a.access_level_id);
-
             const { data: videos, error } = await supabase
                 .from('videos')
-                .select(`
-                *,
-                access_levels (name)
-            `)
+                .select('*, access_levels(name)')
                 .in('access_level_id', accessLevelIds)
                 .order('order_index', { ascending: true });
 
@@ -372,48 +248,52 @@
                 .eq('completed', true);
 
             completedVideoIds = completedVideos?.map(v => v.video_id) || [];
-
             allVideos = videos;
 
             const videoHierarchy = organizeVideoHierarchy(videos);
 
-            const multiLevel = accessLevelIds.length > 1 ||
-                [...new Set(videos.map(v => v.access_level_id))].length > 1;
+            const levelIds = [...new Set(videos.map(v => v.access_level_id))].sort();
+            const multiLevel = levelIds.length > 1;
 
-            let lastLevelId = null;
-            let flatIndex = 0;
+            if (multiLevel) {
+                levelIds.forEach(levelId => {
+                    const levelVideos = videoHierarchy.filter(g => g.main.access_level_id === levelId);
+                    if (!levelVideos.length) return;
 
-            videoHierarchy.forEach(videoGroup => {
-                const mainVideo = videoGroup.main;
-
-                if (mainVideo.parent_video_id) {
-                    return;
-                }
-
-                if (multiLevel && mainVideo.access_level_id !== lastLevelId) {
-                    lastLevelId = mainVideo.access_level_id;
-                    const levelName = mainVideo.access_levels?.name || 'Geral';
                     const header = document.createElement('div');
                     header.className = 'level-section-header';
                     header.innerHTML = `
-                        <span class="level-badge">${levelName}</span>
-                        <h3>${levelName}</h3>
+                        <span class="level-badge">${getLevelLabel(levelId)}</span>
+                        <h3>${getLevelLabel(levelId)}</h3>
                     `;
                     container.appendChild(header);
-                }
 
-                const isCompleted = completedVideoIds.includes(mainVideo.id);
-                const isLocked = isVideoLocked(mainVideo, flatIndex);
-
-                const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false, videoGroup.children.length);
-                container.appendChild(card);
-                flatIndex++;
-            });
+                    let flatIndex = allVideos.indexOf(levelVideos[0].main);
+                    levelVideos.forEach(videoGroup => {
+                        const mainVideo = videoGroup.main;
+                        if (mainVideo.parent_video_id) return;
+                        const idx = allVideos.indexOf(mainVideo);
+                        const isCompleted = completedVideoIds.includes(mainVideo.id);
+                        const isLocked = isVideoLocked(mainVideo, idx);
+                        const card = createVideoCard(mainVideo, idx, isCompleted, isLocked, false, videoGroup.children.length);
+                        container.appendChild(card);
+                    });
+                });
+            } else {
+                let flatIndex = 0;
+                videoHierarchy.forEach(videoGroup => {
+                    const mainVideo = videoGroup.main;
+                    if (mainVideo.parent_video_id) return;
+                    const isCompleted = completedVideoIds.includes(mainVideo.id);
+                    const isLocked = isVideoLocked(mainVideo, flatIndex);
+                    const card = createVideoCard(mainVideo, flatIndex, isCompleted, isLocked, false, videoGroup.children.length);
+                    container.appendChild(card);
+                    flatIndex++;
+                });
+            }
 
             const savedView = localStorage.getItem('viewMode') || 'grid';
-            if (savedView === 'list') {
-                container.classList.add('list-view');
-            }
+            if (savedView === 'list') container.classList.add('list-view');
 
         } catch (error) {
             console.error('Erro ao carregar vídeos:', error);
@@ -427,19 +307,14 @@
     function organizeVideoHierarchy(videos) {
         const hierarchy = [];
         const videoMap = new Map();
-
         const sortedVideos = [...videos].sort((a, b) => a.order_index - b.order_index);
 
-        sortedVideos.forEach(video => {
-            videoMap.set(video.id, { main: video, children: [] });
-        });
+        sortedVideos.forEach(video => videoMap.set(video.id, { main: video, children: [] }));
 
         sortedVideos.forEach(video => {
             if (video.parent_video_id) {
                 const parent = videoMap.get(video.parent_video_id);
-                if (parent) {
-                    parent.children.push(video);
-                }
+                if (parent) parent.children.push(video);
             } else {
                 hierarchy.push(videoMap.get(video.id));
             }
@@ -448,12 +323,8 @@
         hierarchy.forEach(group => {
             if (group.children.length > 0) {
                 group.children.sort((a, b) => {
-                    if (a.order_index !== b.order_index) {
-                        return a.order_index - b.order_index;
-                    }
-                    if (a.section_number && b.section_number) {
-                        return parseFloat(a.section_number) - parseFloat(b.section_number);
-                    }
+                    if (a.order_index !== b.order_index) return a.order_index - b.order_index;
+                    if (a.section_number && b.section_number) return parseFloat(a.section_number) - parseFloat(b.section_number);
                     return 0;
                 });
             }
@@ -463,11 +334,9 @@
     }
 
     async function loadFiles() {
-        if (isLoadingFiles) {
-            return;
-        }
-
+        if (isLoadingFiles) return;
         isLoadingFiles = true;
+
         const loading = document.getElementById('files-loading');
         const container = document.getElementById('files-container');
         const noFiles = document.getElementById('no-files');
@@ -477,104 +346,62 @@
         noFiles.style.display = 'none';
 
         try {
-            const { data: userAccess } = await supabase
-                .from('user_access')
-                .select('access_level_id')
-                .eq('user_id', currentUser.id);
+            const accessLevelIds = currentAccessLevelIds;
 
-            if (!userAccess || userAccess.length === 0) {
+            if (!accessLevelIds.length) {
                 loading.style.display = 'none';
                 noFiles.style.display = 'block';
                 return;
             }
 
-            const accessLevelIds = userAccess.map(a => a.access_level_id);
+            const [foldersRes, filesRes] = await Promise.all([
+                supabase.from('folders').select('*, access_levels(name)').in('access_level_id', accessLevelIds).order('created_at', { ascending: false }),
+                supabase.from('files').select('*, access_levels(name)').in('access_level_id', accessLevelIds).order('order_files', { ascending: true, nullsFirst: false })
+            ]);
 
-            const { data: folders, error: foldersError } = await supabase
-                .from('folders')
-                .select(`
-                *,
-                access_levels (name)
-            `)
-                .in('access_level_id', accessLevelIds)
-                .order('created_at', { ascending: false });
-
-            if (foldersError) throw foldersError;
-
-            const { data: files, error: filesError } = await supabase
-                .from('files')
-                .select(`
-        *,
-        access_levels (name)
-    `)
-                .in('access_level_id', accessLevelIds)
-                .order('order_files', { ascending: true, nullsFirst: false });
-
-            if (filesError) throw filesError;
+            if (foldersRes.error) throw foldersRes.error;
+            if (filesRes.error) throw filesRes.error;
 
             loading.style.display = 'none';
 
-            allFolders = folders || [];
-            allFiles = files || [];
+            allFolders = foldersRes.data || [];
+            allFiles = filesRes.data || [];
 
-            const allLevelIds = [...new Set([
+            const levelIds = [...new Set([
                 ...allFolders.map(f => f.access_level_id),
                 ...allFiles.filter(f => !f.folder_id).map(f => f.access_level_id)
             ])].filter(Boolean).sort();
 
-            const multiLevel = allLevelIds.length > 1;
+            const multiLevel = levelIds.length > 1;
 
             if (multiLevel) {
-                allLevelIds.forEach(levelId => {
+                levelIds.forEach(levelId => {
                     const levelFolders = allFolders.filter(f => f.access_level_id === levelId);
-                    const levelStandaloneFiles = allFiles.filter(f => !f.folder_id && f.access_level_id === levelId);
+                    const levelStandalone = allFiles.filter(f => !f.folder_id && f.access_level_id === levelId);
 
-                    if (levelFolders.length === 0 && levelStandaloneFiles.length === 0) return;
-
-                    const levelName = (levelFolders[0] || levelStandaloneFiles[0])?.access_levels?.name || `Nível ${levelId}`;
+                    if (!levelFolders.length && !levelStandalone.length) return;
 
                     const header = document.createElement('div');
                     header.className = 'level-section-header';
                     header.innerHTML = `
-                        <span class="level-badge">${levelName}</span>
-                        <h3>${levelName}</h3>
+                        <span class="level-badge">${getLevelLabel(levelId)}</span>
+                        <h3>${getLevelLabel(levelId)}</h3>
                     `;
                     container.appendChild(header);
 
-                    levelFolders.forEach(folder => {
-                        container.appendChild(createFolderCard(folder));
-                    });
-                    levelStandaloneFiles.forEach(file => {
-                        container.appendChild(createFileCard(file));
-                    });
+                    levelFolders.forEach(folder => container.appendChild(createFolderCard(folder)));
+                    levelStandalone.forEach(file => container.appendChild(createFileCard(file)));
                 });
             } else {
-                if (allFolders.length > 0) {
-                    allFolders.forEach(folder => {
-                        const card = createFolderCard(folder);
-                        container.appendChild(card);
-                    });
-                }
-
-                const standaloneFiles = allFiles.filter(f => !f.folder_id);
-                if (standaloneFiles.length > 0) {
-                    standaloneFiles.forEach(file => {
-                        const card = createFileCard(file);
-                        container.appendChild(card);
-                    });
-                }
+                allFolders.forEach(folder => container.appendChild(createFolderCard(folder)));
+                allFiles.filter(f => !f.folder_id).forEach(file => container.appendChild(createFileCard(file)));
             }
 
-            const anyStandalone = allFiles.filter(f => !f.folder_id);
-            if (allFolders.length === 0 && anyStandalone.length === 0) {
-                noFiles.style.display = 'block';
-                return;
-            }
+            const hasContent = allFolders.length > 0 || allFiles.filter(f => !f.folder_id).length > 0;
+            if (!hasContent) noFiles.style.display = 'block';
 
             const savedView = localStorage.getItem('viewMode') || 'grid';
-            if (savedView === 'list') {
-                container.classList.add('list-view');
-            }
+            if (savedView === 'list') container.classList.add('list-view');
 
         } catch (error) {
             console.error('Erro ao carregar arquivos:', error);
@@ -587,55 +414,43 @@
 
     function createVideoCard(video, index, isCompleted, isLocked, isSubVideo, subVideosCount = 0) {
         const defaultThumbnail = "https://hjeivflwulqtlkwvvmvw.supabase.co/storage/v1/object/public/thumbnail/Thumbnail.png";
-
         const card = document.createElement('div');
         card.className = 'content-card';
+        card.dataset.videoId = video.id;
 
         if (isCompleted) card.classList.add('completed');
         if (isLocked) card.classList.add('locked');
 
-        if (!isLocked) {
-            card.onclick = () => openVideoModal(video, index);
-        } else {
-            card.onclick = () => {
-                showToast('Você precisa completar a aula anterior para desbloquear este conteúdo.');
-            };
-        }
+        card.onclick = () => isLocked
+            ? showToast('Você precisa completar a aula anterior para desbloquear este conteúdo.')
+            : openVideoModal(video, index);
 
         const sectionNumber = video.section_number || (index + 1);
 
         card.innerHTML = `
         <span class="section-badge">${sectionNumber}</span>
-
         ${subVideosCount > 0 ? `
-    <div class="sub-videos-count">
-        <i class="fa-solid fa-layer-group"></i>
-        <span>${subVideosCount} ${subVideosCount === 1 ? 'vídeo' : 'vídeos'}</span>
-    </div>
-` : ''}
-        
+            <div class="sub-videos-count">
+                <i class="fa-solid fa-layer-group"></i>
+                <span>${subVideosCount} ${subVideosCount === 1 ? 'vídeo' : 'vídeos'}</span>
+            </div>` : ''}
         <div class="video-thumbnail">
             <img src="${video.thumbnail_url || defaultThumbnail}" alt="${video.title}">
             ${!isLocked ? '<div class="play-icon">▶</div>' : ''}
         </div>
-
         ${isCompleted ? `
             <div class="completion-check">
                 <i class="fa-regular fa-square-check"></i>
                 <span>Concluído</span>
-            </div>
-        ` : ''}
-
+            </div>` : ''}
         ${isLocked ? `
             <div class="completion-check locked-indicator">
                 <i class="fa-solid fa-lock"></i>
                 <span>Bloqueado</span>
-            </div>
-        ` : ''}
-
+            </div>` : ''}
         <h3>${video.title}</h3>
         <p>${video.description || 'Sem descrição'}</p>
-    `;
+        `;
 
         return card;
     }
@@ -643,18 +458,37 @@
     function createFileCard(file) {
         const card = document.createElement('div');
         card.className = 'file-card';
-
         const icon = getFileIcon(file.name);
-
         card.innerHTML = `
         <div class="file-icon">${icon}</div>
         <h3>${file.name}</h3>
         <p>${file.description || 'Sem descrição'}</p>
-        <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn">
-        <i class="fa-solid fa-download"></i>
+        <button class="btn" title="Baixar arquivo">
+            <i class="fa-solid fa-download"></i>
         </button>
-    `;
+        `;
+        card.querySelector('button').addEventListener('click', () => downloadFile(file.file_url, file.name));
+        return card;
+    }
 
+    function createFileCardWithFolder(file, parentFolder) {
+        const card = document.createElement('div');
+        card.className = 'file-card';
+        const icon = getFileIcon(file.name);
+        card.innerHTML = `
+        <div class="file-icon">${icon}</div>
+        ${parentFolder ? `
+            <div class="badge" style="margin-bottom: 8px; background: rgba(107, 155, 124, 0.15); color: var(--primary); display: flex; align-items: center; gap: 6px;">
+                <i class="fa-solid fa-folder" style="font-size: 12px;"></i>
+                <span>${parentFolder.name}</span>
+            </div>` : ''}
+        <h3>${file.name}</h3>
+        <p>${file.description || 'Sem descrição'}</p>
+        <button class="btn" title="Baixar arquivo">
+            <i class="fa-solid fa-download"></i>
+        </button>
+        `;
+        card.querySelector('button').addEventListener('click', () => downloadFile(file.file_url, file.name));
         return card;
     }
 
@@ -662,37 +496,29 @@
         const playlistContainer = document.getElementById('playlist-items');
         playlistContainer.innerHTML = '';
 
-        const completedCount = completedVideoIds.length;
         document.getElementById('playlist-progress-text').textContent =
-            `${completedCount} de ${allVideos.length} concluídas`;
+            `${completedVideoIds.length} de ${allVideos.length} concluídas`;
 
         const videoHierarchy = organizeVideoHierarchy(allVideos);
-
         let flatIndex = 0;
 
         videoHierarchy.forEach(videoGroup => {
             const mainVideo = videoGroup.main;
-
-            if (mainVideo.parent_video_id) {
-                return;
-            }
+            if (mainVideo.parent_video_id) return;
 
             const isCompleted = completedVideoIds.includes(mainVideo.id);
             const isLocked = isVideoLocked(mainVideo, flatIndex);
             const isActive = flatIndex === currentVideoIndex;
 
-            const item = createPlaylistItem(mainVideo, flatIndex, isCompleted, isLocked, isActive, false);
-            playlistContainer.appendChild(item);
+            playlistContainer.appendChild(createPlaylistItem(mainVideo, flatIndex, isCompleted, isLocked, isActive, false));
             flatIndex++;
 
-            if (videoGroup.children && videoGroup.children.length > 0) {
-                videoGroup.children.forEach((subVideo, subIndex) => {
+            if (videoGroup.children?.length > 0) {
+                videoGroup.children.forEach((subVideo) => {
                     const subCompleted = completedVideoIds.includes(subVideo.id);
                     const subLocked = isVideoLocked(subVideo, flatIndex);
                     const subActive = flatIndex === currentVideoIndex;
-
-                    const subItem = createPlaylistItem(subVideo, flatIndex, subCompleted, subLocked, subActive, true);
-                    playlistContainer.appendChild(subItem);
+                    playlistContainer.appendChild(createPlaylistItem(subVideo, flatIndex, subCompleted, subLocked, subActive, true));
                     flatIndex++;
                 });
             }
@@ -719,16 +545,12 @@
             <div class="playlist-item-title">${video.title}</div>
             <div class="playlist-item-duration">${statusText}</div>
         </div>
-    `;
+        `;
 
         if (!isLocked) {
-            item.onclick = () => {
-                openVideoModal(video, index);
-            };
+            item.onclick = () => openVideoModal(video, index);
             item.onkeypress = (e) => {
-                if (e.key === 'Enter' || e.key === ' ') {
-                    openVideoModal(video, index);
-                }
+                if (e.key === 'Enter' || e.key === ' ') openVideoModal(video, index);
             };
         }
 
@@ -763,15 +585,9 @@
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            <span>Concluída</span>
-        `;
+            <span>Concluída</span>`;
             watchedIndicator.classList.add('show');
-
-            if (index < allVideos.length - 1) {
-                nextVideoBtn.style.display = 'flex';
-            } else {
-                nextVideoBtn.style.display = 'none';
-            }
+            nextVideoBtn.style.display = index < allVideos.length - 1 ? 'flex' : 'none';
         } else {
             markCompleteBtn.disabled = false;
             markCompleteBtn.innerHTML = `
@@ -779,20 +595,82 @@
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            <span>Marcar como concluído</span>
-        `;
+            <span>Marcar como concluído</span>`;
             watchedIndicator.classList.remove('show');
             nextVideoBtn.style.display = 'none';
         }
 
         renderVideoPlayer(player, video);
-
         await loadVideoFiles(video.id);
-
         createPlaylist();
 
         modal.classList.add('active');
         document.body.style.overflow = 'hidden';
+    }
+
+    async function loadVideoFiles(videoId) {
+        const container = document.getElementById('video-files-container');
+
+        try {
+            const { data: videoFiles, error } = await supabase
+                .from('video_files')
+                .select(`file_id, display_order, files(id, name, description, file_url)`)
+                .eq('video_id', videoId)
+                .order('display_order', { ascending: true });
+
+            if (error) throw error;
+
+            container.innerHTML = '';
+
+            if (!videoFiles || videoFiles.length === 0) {
+                container.style.display = 'none';
+                return;
+            }
+
+            container.style.display = 'block';
+
+            const header = document.createElement('div');
+            header.className = 'video-files-header';
+            header.innerHTML = `
+            <h3><i class="fa-solid fa-file-arrow-down"></i></h3>
+            <span class="files-count">${videoFiles.length} ${videoFiles.length === 1 ? 'arquivo' : 'arquivos'}</span>
+            `;
+            container.appendChild(header);
+
+            const filesList = document.createElement('div');
+            filesList.className = 'video-files-list';
+
+            videoFiles.forEach(vf => {
+                const file = vf.files;
+                if (!file) return;
+                const fileCard = document.createElement('div');
+                fileCard.className = 'video-file-item';
+                const icon = getFileIcon(file.name);
+                fileCard.innerHTML = `
+                <div class="video-file-icon">${icon}</div>
+                <div class="video-file-info">
+                    <h4>${file.name}</h4>
+                    ${file.description ? `<p>${file.description}</p>` : ''}
+                </div>
+                <button class="btn-download" title="Baixar arquivo">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                        <polyline points="7 10 12 15 17 10"></polyline>
+                        <line x1="12" y1="15" x2="12" y2="3"></line>
+                    </svg>
+                    <span>Baixar</span>
+                </button>
+                `;
+                fileCard.querySelector('button').addEventListener('click', () => downloadFile(file.file_url, file.name));
+                filesList.appendChild(fileCard);
+            });
+
+            container.appendChild(filesList);
+
+        } catch (error) {
+            console.error('Erro ao carregar arquivos do vídeo:', error);
+            container.style.display = 'none';
+        }
     }
 
     function renderVideoPlayer(player, video) {
@@ -801,32 +679,17 @@
         if (url.includes('youtube.com') || url.includes('youtu.be')) {
             const videoId = extractYouTubeId(url);
             player.innerHTML = `
-            <iframe 
-                src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&showinfo=0" 
-                frameborder="0" 
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture" 
-                allowfullscreen
-                title="Video player">
-            </iframe>
-        `;
-        }
-
-        else if (url.includes('vimeo.com')) {
+            <iframe src="https://www.youtube.com/embed/${videoId}?autoplay=1&rel=0&modestbranding=1&showinfo=0"
+                frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                allowfullscreen title="Video player"></iframe>`;
+        } else if (url.includes('vimeo.com')) {
             const videoId = url.split('/').pop().split('?')[0];
             player.innerHTML = `
-            <iframe 
-                src="https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0" 
-                frameborder="0" 
-                allow="autoplay; fullscreen; picture-in-picture" 
-                allowfullscreen
-                title="Video player">
-            </iframe>
-        `;
-        }
-
-        else if (url.includes('drive.google.com')) {
+            <iframe src="https://player.vimeo.com/video/${videoId}?autoplay=1&title=0&byline=0&portrait=0"
+                frameborder="0" allow="autoplay; fullscreen; picture-in-picture"
+                allowfullscreen title="Video player"></iframe>`;
+        } else if (url.includes('drive.google.com')) {
             let embedUrl = url;
-
             if (url.includes('/file/d/')) {
                 const fileId = url.split('/file/d/')[1].split('/')[0];
                 embedUrl = `https://drive.google.com/file/d/${fileId}/preview`;
@@ -836,26 +699,15 @@
             } else if (url.includes('/view')) {
                 embedUrl = url.replace('/view', '/preview');
             }
-
             player.innerHTML = `
-            <iframe 
-                src="${embedUrl}" 
-                frameborder="0" 
-                allow="autoplay" 
-                allowfullscreen
-                title="Video player"
-                sandbox="allow-scripts allow-same-origin allow-presentation">
-            </iframe>
-        `;
-        }
-
-        else {
+            <iframe src="${embedUrl}" frameborder="0" allow="autoplay" allowfullscreen title="Video player"
+                sandbox="allow-scripts allow-same-origin allow-presentation"></iframe>`;
+        } else {
             player.innerHTML = `
             <video controls controlsList="nodownload" autoplay title="Video player">
                 <source src="${url}" type="video/mp4">
                 Seu navegador não suporta vídeo.
-            </video>
-        `;
+            </video>`;
         }
     }
 
@@ -884,32 +736,44 @@
                     video_id: video.id,
                     completed: true,
                     completed_at: new Date().toISOString()
-                }, {
-                    onConflict: 'user_id,video_id'
-                });
+                }, { onConflict: 'user_id,video_id' });
 
             if (error) throw error;
 
-            if (!completedVideoIds.includes(video.id)) {
-                completedVideoIds.push(video.id);
-            }
+            if (!completedVideoIds.includes(video.id)) completedVideoIds.push(video.id);
 
             markCompleteBtn.innerHTML = `
             <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            <span>Aula concluída</span>
-        `;
+            <span>Aula concluída</span>`;
             watchedIndicator.classList.add('show');
 
-            if (currentVideoIndex < allVideos.length - 1) {
-                nextVideoBtn.style.display = 'flex';
-            }
+            if (currentVideoIndex < allVideos.length - 1) nextVideoBtn.style.display = 'flex';
 
             createPlaylist();
 
-            await loadVideos();
+            const card = document.querySelector(`.content-card[data-video-id="${video.id}"]`);
+            if (card) {
+                card.classList.add('completed');
+                card.querySelector('.locked-indicator')?.remove();
+                if (!card.querySelector('.completion-check')) {
+                    card.insertAdjacentHTML('beforeend', `
+                        <div class="completion-check">
+                            <i class="fa-regular fa-square-check"></i>
+                            <span>Concluído</span>
+                        </div>`);
+                }
+
+                const nextCard = document.querySelector(`.content-card[data-video-id="${allVideos[currentVideoIndex + 1]?.id}"]`);
+                if (nextCard) {
+                    nextCard.classList.remove('locked');
+                    nextCard.onclick = () => openVideoModal(allVideos[currentVideoIndex + 1], currentVideoIndex + 1);
+                    nextCard.querySelector('.locked-indicator')?.remove();
+                    nextCard.querySelector('.video-thumbnail')?.insertAdjacentHTML('beforeend', '<div class="play-icon">▶</div>');
+                }
+            }
 
             showToast('✅ Aula concluída! Próxima aula disponível.');
 
@@ -921,8 +785,7 @@
                 <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path>
                 <polyline points="22 4 12 14.01 9 11.01"></polyline>
             </svg>
-            <span>Marcar concluída</span>
-        `;
+            <span>Marcar concluída</span>`;
             showToast('❌ Erro ao salvar progresso. Tente novamente.');
         }
     }
@@ -931,9 +794,7 @@
         if (currentVideoIndex < allVideos.length - 1) {
             const nextVideo = allVideos[currentVideoIndex + 1];
             closeVideoModal();
-            setTimeout(() => {
-                openVideoModal(nextVideo, currentVideoIndex + 1);
-            }, 300);
+            setTimeout(() => openVideoModal(nextVideo, currentVideoIndex + 1), 300);
         }
     }
 
@@ -948,16 +809,13 @@
             const response = await fetch(url);
             const blob = await response.blob();
             const blobUrl = window.URL.createObjectURL(blob);
-
             const link = document.createElement('a');
             link.href = blobUrl;
             link.download = filename;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
-
             setTimeout(() => window.URL.revokeObjectURL(blobUrl), 100);
-
             showToast('✅ Download iniciado!');
         } catch (error) {
             window.open(url, '_blank');
@@ -991,28 +849,19 @@
     }
 
     function switchTab(tabName) {
-        document.querySelectorAll('.tab').forEach(tab => {
-            tab.classList.remove('active');
-        });
+        document.querySelectorAll('.tab').forEach(tab => tab.classList.remove('active'));
         document.querySelector(`[data-tab="${tabName}"]`).classList.add('active');
-
-        document.querySelectorAll('.tab-content').forEach(content => {
-            content.classList.remove('active');
-        });
+        document.querySelectorAll('.tab-content').forEach(content => content.classList.remove('active'));
         document.getElementById(`${tabName}-tab`).classList.add('active');
     }
 
     function switchView(view) {
         localStorage.setItem('viewMode', view);
-
-        document.querySelectorAll('.view-btn').forEach(btn => {
-            btn.classList.remove('active');
-        });
+        document.querySelectorAll('.view-btn').forEach(btn => btn.classList.remove('active'));
         document.querySelector(`[data-view="${view}"]`).classList.add('active');
 
         const videosContainer = document.getElementById('videos-container');
         const filesContainer = document.getElementById('files-container');
-
         if (view === 'list') {
             videosContainer.classList.add('list-view');
             filesContainer.classList.add('list-view');
@@ -1023,60 +872,184 @@
     }
 
     function showToast(message) {
-        const existingToast = document.querySelector('.custom-toast');
-        if (existingToast) {
-            existingToast.remove();
-        }
-
+        document.querySelector('.custom-toast')?.remove();
         const toast = document.createElement('div');
         toast.className = 'custom-toast';
         toast.style.cssText = `
-        position: fixed;
-        bottom: 30px;
-        right: 30px;
-        background: rgba(45, 52, 54, 0.95);
-        color: white;
-        padding: 16px 24px;
-        border-radius: 12px;
-        font-weight: 600;
-        z-index: 10000;
-        animation: slideInUp 0.3s ease;
-        box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        max-width: 400px;
-    `;
+            position: fixed; bottom: 30px; right: 30px;
+            background: rgba(45, 52, 54, 0.95); color: white;
+            padding: 16px 24px; border-radius: 12px; font-weight: 600;
+            z-index: 10000; animation: slideInUp 0.3s ease;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3); max-width: 400px;
+        `;
         toast.textContent = message;
         document.body.appendChild(toast);
-
         setTimeout(() => {
             toast.style.animation = 'slideOutDown 0.3s ease';
-            setTimeout(() => {
-                if (toast.parentNode) {
-                    document.body.removeChild(toast);
-                }
-            }, 300);
+            setTimeout(() => toast.parentNode && document.body.removeChild(toast), 300);
         }, 4000);
+    }
+
+    function isVideoLocked(video, index) {
+        if (video.unlocked === true) return false;
+        if (index === 0) return false;
+        const previousVideo = allVideos[index - 1];
+        return !(previousVideo && completedVideoIds.includes(previousVideo.id));
     }
 
     const originalConsoleError = console.error;
     console.error = function (...args) {
         const errorString = args.join(' ');
-
         if (
             errorString.includes('Content Security Policy') ||
             errorString.includes('frame-ancestors') ||
             errorString.includes('ssl.gstatic.com') ||
             errorString.includes('drive.google.com') ||
             errorString.includes('aria-hidden')
-        ) {
-            return;
-        }
-
+        ) return;
         originalConsoleError.apply(console, args);
     };
 
+    function createFolderCard(folder) {
+        const card = document.createElement('div');
+        card.className = 'folder-card';
+        const filesCount = allFiles.filter(f => f.folder_id === folder.id).length;
+        card.innerHTML = `
+        <div class="folder-icon"><i class="fa-solid fa-folder"></i></div>
+        <h3>${folder.name}</h3>
+        <p>${folder.description || 'Sem descrição'}</p>
+        <div class="folder-files-count">
+            <i class="fa-solid fa-file"></i>
+            <span>${filesCount} ${filesCount === 1 ? 'arquivo' : 'arquivos'}</span>
+        </div>
+        `;
+        card.addEventListener('click', () => openFolderModal(folder));
+        return card;
+    }
+
+    async function openFolderModal(folder) {
+        currentFolder = folder;
+        const modal = document.getElementById('folder-modal');
+        const loading = document.getElementById('folder-files-loading');
+        const container = document.getElementById('folder-files-container');
+        const noFiles = document.getElementById('folder-no-files');
+
+        document.getElementById('folder-modal-title').textContent = folder.name;
+        document.getElementById('folder-modal-description').textContent = folder.description || 'Sem descrição';
+
+        loading.style.display = 'block';
+        container.innerHTML = '';
+        noFiles.style.display = 'none';
+        modal.classList.add('active');
+        document.body.style.overflow = 'hidden';
+
+        try {
+            const folderFiles = allFiles.filter(f => f.folder_id === folder.id);
+            loading.style.display = 'none';
+            if (!folderFiles.length) { noFiles.style.display = 'block'; return; }
+            folderFiles.forEach(file => container.appendChild(createFolderFileCard(file)));
+        } catch (error) {
+            console.error('Erro ao carregar arquivos da pasta:', error);
+            loading.style.display = 'none';
+            container.innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Erro ao carregar arquivos</p></div>';
+        }
+    }
+
+    function createFolderFileCard(file) {
+        const card = document.createElement('div');
+        card.className = 'folder-file-card';
+        const icon = getFileIcon(file.name);
+        card.innerHTML = `
+        <div class="folder-file-icon">${icon}</div>
+        <div class="folder-file-info">
+            <h4>${file.name}</h4>
+            ${file.description ? `<p>${file.description}</p>` : ''}
+        </div>
+        <button class="btn-download-small" title="Baixar arquivo">
+            <i class="fa-solid fa-download"></i>
+        </button>
+        `;
+        card.querySelector('button').addEventListener('click', () => downloadFile(file.file_url, file.name));
+        return card;
+    }
+
+    function closeFolderModal() {
+        document.getElementById('folder-modal').classList.remove('active');
+        document.body.style.overflow = 'auto';
+        currentFolder = null;
+    }
+
+    document.getElementById('files-search')?.addEventListener('input', handleFilesSearch);
+    document.getElementById('clear-search')?.addEventListener('click', clearFilesSearch);
+
+    function handleFilesSearch(e) {
+        const searchTerm = e.target.value.toLowerCase().trim();
+        const clearBtn = document.getElementById('clear-search');
+        const container = document.getElementById('files-container');
+        const noResults = document.getElementById('no-search-results');
+        const noFiles = document.getElementById('no-files');
+
+        if (!searchTerm) {
+            clearBtn.style.display = 'none';
+            noResults.style.display = 'none';
+            noFiles.style.display = (allFolders.length === 0 && allFiles.filter(f => !f.folder_id).length === 0) ? 'block' : 'none';
+            loadFiles();
+            return;
+        }
+
+        clearBtn.style.display = 'flex';
+
+        const filteredFolders = allFolders.filter(f =>
+            f.name.toLowerCase().includes(searchTerm) ||
+            (f.description && f.description.toLowerCase().includes(searchTerm))
+        );
+        const standaloneFiles = allFiles.filter(f =>
+            !f.folder_id && (
+                f.name.toLowerCase().includes(searchTerm) ||
+                (f.description && f.description.toLowerCase().includes(searchTerm))
+            )
+        );
+        const filesInsideFolders = allFiles.filter(f =>
+            f.folder_id && (
+                f.name.toLowerCase().includes(searchTerm) ||
+                (f.description && f.description.toLowerCase().includes(searchTerm))
+            )
+        );
+
+        container.innerHTML = '';
+        noFiles.style.display = 'none';
+
+        if (!filteredFolders.length && !standaloneFiles.length && !filesInsideFolders.length) {
+            noResults.style.display = 'block';
+        } else {
+            noResults.style.display = 'none';
+            filteredFolders.forEach(folder => container.appendChild(createFolderCard(folder)));
+            standaloneFiles.forEach(file => container.appendChild(createFileCard(file)));
+            filesInsideFolders.forEach(file => {
+                const parentFolder = allFolders.find(f => f.id === file.folder_id);
+                container.appendChild(createFileCardWithFolder(file, parentFolder));
+            });
+        }
+    }
+
+    function clearFilesSearch() {
+        document.getElementById('files-search').value = '';
+        document.getElementById('clear-search').style.display = 'none';
+        document.getElementById('no-search-results').style.display = 'none';
+        loadFiles();
+    }
+
+    function initAntiInspect() {
+        document.addEventListener('contextmenu', e => { e.preventDefault(); return false; });
+        document.addEventListener('keydown', e => {
+            if (e.key === 'F12') { e.preventDefault(); return false; }
+            if (e.ctrlKey && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(e.key)) { e.preventDefault(); return false; }
+            if (e.ctrlKey && (e.key === 'u' || e.key === 'U')) { e.preventDefault(); return false; }
+        });
+    }
+
     async function loadAdminDashboard() {
         try {
-
             const [usersResult, videosResult, progressResult, activityResult] = await Promise.all([
                 supabase.from('users').select('id, name, full_name'),
                 supabase.from('videos').select('*'),
@@ -1084,14 +1057,7 @@
                 supabase.from('user_activity_logs').select('user_id, last_login').order('last_login', { ascending: false })
             ]);
 
-            if (usersResult.error) {
-                console.error('❌ Erro ao buscar users:', usersResult.error);
-                throw usersResult.error;
-            }
-
-            if (videosResult.error) {
-                console.error('❌ Erro ao buscar videos:', videosResult.error);
-            }
+            if (usersResult.error) throw usersResult.error;
 
             const users = usersResult.data || [];
             const videos = videosResult.data || [];
@@ -1099,25 +1065,12 @@
             const activities = activityResult.data || [];
 
             const activityMap = {};
-            activities.forEach(activity => {
-                if (!activityMap[activity.user_id]) {
-                    activityMap[activity.user_id] = activity.last_login;
-                }
-            });
-
-            allProgress.forEach(progress => {
-                if (!activityMap[progress.user_id] && progress.completed_at) {
-                    activityMap[progress.user_id] = progress.completed_at;
-                }
-            });
+            activities.forEach(a => { if (!activityMap[a.user_id]) activityMap[a.user_id] = a.last_login; });
+            allProgress.forEach(p => { if (!activityMap[p.user_id] && p.completed_at) activityMap[p.user_id] = p.completed_at; });
 
             const totalCompletions = allProgress.filter(p => p.completed).length;
-
             const sevenDaysAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
-            const activeUsers = users.filter(u => {
-                const lastLogin = activityMap[u.id];
-                return lastLogin && new Date(lastLogin) > sevenDaysAgo;
-            }).length;
+            const activeUsers = users.filter(u => activityMap[u.id] && new Date(activityMap[u.id]) > sevenDaysAgo).length;
 
             document.getElementById('total-users').textContent = users.length;
             document.getElementById('total-videos').textContent = videos.length;
@@ -1129,7 +1082,6 @@
             await loadLevelDistributionChart(users);
 
             setupFilterDropdown();
-
         } catch (error) {
             console.error('❌ Erro ao carregar dashboard:', error);
             alert('Erro ao carregar o dashboard. Verifique o console para mais detalhes.');
@@ -1160,15 +1112,10 @@
                         <span style="font-weight: 600; color: var(--text-dark);">${user.name}</span>
                         <span style="font-weight: 700; color: var(--primary);">${user.progress}%</span>
                     </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${user.progress}%"></div>
-                    </div>
-                    <small style="color: var(--text-gray); margin-top: 3px; display: block;">
-                        ${user.completed} vídeos concluídos
-                    </small>
+                    <div class="progress-bar"><div class="progress-fill" style="width: ${user.progress}%"></div></div>
+                    <small style="color: var(--text-gray); margin-top: 3px; display: block;">${user.completed} vídeos concluídos</small>
                 </div>
-            </div>
-        `;
+            </div>`;
         });
 
         chartHTML += '</div>';
@@ -1183,17 +1130,13 @@
         const accessMap = {};
         if (accessData) {
             accessData.forEach(a => {
-                accessMap[a.user_id] = {
-                    level_id: a.access_level_id,
-                    level_name: a.access_levels?.name || 'Desconhecido'
-                };
+                accessMap[a.user_id] = { level_id: a.access_level_id, level_name: a.access_levels?.name || 'Desconhecido' };
             });
         }
 
         usersData = users.map(user => {
             const userName = user.full_name || user.name || `Usuário ${user.id.substring(0, 8)}`;
-            const userProgress = allProgress.filter(p => p.user_id === user.id && p.completed);
-            const completedCount = userProgress.length;
+            const completedCount = allProgress.filter(p => p.user_id === user.id && p.completed).length;
             const progressPercent = totalVideos > 0 ? Math.round((completedCount / totalVideos) * 100) : 0;
             const accessInfo = accessMap[user.id] || { level_id: 0, level_name: 'Sem acesso' };
 
@@ -1201,75 +1144,20 @@
             let lastLoginRaw = null;
             if (activityMap[user.id]) {
                 lastLoginRaw = activityMap[user.id];
-                const loginDate = new Date(lastLoginRaw);
-                lastLogin = loginDate.toLocaleString('pt-BR', {
-                    day: '2-digit',
-                    month: '2-digit',
-                    year: 'numeric',
-                    hour: '2-digit',
-                    minute: '2-digit'
+                lastLogin = new Date(lastLoginRaw).toLocaleString('pt-BR', {
+                    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit'
                 });
             }
 
-            return {
-                userName,
-                accessInfo,
-                progressPercent,
-                completedCount,
-                totalVideos,
-                lastLogin,
-                lastLoginRaw
-            };
+            return { userName, accessInfo, progressPercent, completedCount, totalVideos, lastLogin, lastLoginRaw };
         });
 
         renderUsersTable(usersData);
     }
 
-    async function loadProgressChart(users, totalVideos, allProgress) {
-        const container = document.getElementById('user-progress-chart');
-
-        const userProgressData = users.map(user => {
-            const completedCount = allProgress.filter(p => p.user_id === user.id && p.completed).length;
-            const progressPercent = totalVideos > 0 ? Math.round((completedCount / totalVideos) * 100) : 0;
-            return {
-                name: user.full_name || user.name || `Usuário ${user.id.substring(0, 8)}`,
-                progress: progressPercent,
-                completed: completedCount
-            };
-        }).sort((a, b) => b.progress - a.progress).slice(0, 10);
-
-        let chartHTML = '<div style="display: flex; flex-direction: column; gap: 15px;">';
-
-        userProgressData.forEach((user, index) => {
-            chartHTML += `
-            <div style="display: flex; align-items: center; gap: 15px;">
-                <div style="min-width: 30px; font-weight: 700; color: var(--primary);">#${index + 1}</div>
-                <div style="flex: 1;">
-                    <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
-                        <span style="font-weight: 600; color: var(--text-dark);">${user.name}</span>
-                        <span style="font-weight: 700; color: var(--primary);">${user.progress}%</span>
-                    </div>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${user.progress}%"></div>
-                    </div>
-                    <small style="color: var(--text-gray); margin-top: 3px; display: block;">
-                        ${user.completed} vídeos concluídos
-                    </small>
-                </div>
-            </div>
-        `;
-        });
-
-        chartHTML += '</div>';
-        container.innerHTML = chartHTML;
-    }
-
     async function loadLevelDistributionChart(users) {
         const container = document.getElementById('level-distribution-chart');
-
-        const { data: accessData } = await supabase
-            .from('user_access')
-            .select('access_level_id, access_levels(name)');
+        const { data: accessData } = await supabase.from('user_access').select('access_level_id, access_levels(name)');
 
         const levelCounts = {
             1: { name: 'Psicólogos', count: 0, color: '#6B9B7C' },
@@ -1277,16 +1165,9 @@
             3: { name: 'Desenvolvedores', count: 0, color: '#9b59b6' }
         };
 
-        if (accessData) {
-            accessData.forEach(a => {
-                if (levelCounts[a.access_level_id]) {
-                    levelCounts[a.access_level_id].count++;
-                }
-            });
-        }
+        if (accessData) accessData.forEach(a => { if (levelCounts[a.access_level_id]) levelCounts[a.access_level_id].count++; });
 
-        const total = Object.values(levelCounts).reduce((sum, level) => sum + level.count, 0);
-
+        const total = Object.values(levelCounts).reduce((sum, l) => sum + l.count, 0);
         let chartHTML = '<div style="display: flex; flex-direction: column; gap: 20px;">';
 
         Object.values(levelCounts).forEach(level => {
@@ -1300,8 +1181,7 @@
                 <div class="progress-bar">
                     <div class="progress-fill" style="width: ${percent}%; background: ${level.color};"></div>
                 </div>
-            </div>
-        `;
+            </div>`;
         });
 
         chartHTML += '</div>';
@@ -1311,29 +1191,19 @@
     function setupFilterDropdown() {
         const filterBtn = document.getElementById('filter-btn');
         const filterMenu = document.getElementById('filter-menu');
-        const filterOptions = document.querySelectorAll('.filter-option');
-
         if (!filterBtn || !filterMenu) return;
 
-        filterBtn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            filterMenu.classList.toggle('active');
-        });
-
+        filterBtn.addEventListener('click', (e) => { e.stopPropagation(); filterMenu.classList.toggle('active'); });
         document.addEventListener('click', (e) => {
-            if (!filterMenu.contains(e.target) && e.target !== filterBtn) {
-                filterMenu.classList.remove('active');
-            }
+            if (!filterMenu.contains(e.target) && e.target !== filterBtn) filterMenu.classList.remove('active');
         });
 
-        filterOptions.forEach(option => {
+        document.querySelectorAll('.filter-option').forEach(option => {
             option.addEventListener('click', () => {
                 const filter = option.dataset.filter;
                 currentFilter = filter;
-
-                filterOptions.forEach(opt => opt.classList.remove('active'));
+                document.querySelectorAll('.filter-option').forEach(opt => opt.classList.remove('active'));
                 option.classList.add('active');
-
                 applyFilter(filter);
                 filterMenu.classList.remove('active');
             });
@@ -1342,47 +1212,29 @@
 
     function applyFilter(filter) {
         let sortedUsers = [...usersData];
-
         switch (filter) {
-            case 'level':
-                sortedUsers.sort((a, b) => a.accessInfo.level_id - b.accessInfo.level_id);
-                break;
-            case 'recent':
-                sortedUsers.sort((a, b) => {
-                    const dateA = a.lastLogin === 'Nunca' ? new Date(0) : new Date(a.lastLoginRaw);
-                    const dateB = b.lastLogin === 'Nunca' ? new Date(0) : new Date(b.lastLoginRaw);
-                    return dateB - dateA;
-                });
-                break;
-            case 'alphabetical':
-                sortedUsers.sort((a, b) => a.userName.localeCompare(b.userName));
-                break;
-            case 'completed':
-                sortedUsers.sort((a, b) => b.completedCount - a.completedCount);
-                break;
-            default:
-                break;
+            case 'level': sortedUsers.sort((a, b) => a.accessInfo.level_id - b.accessInfo.level_id); break;
+            case 'recent': sortedUsers.sort((a, b) => {
+                const dA = a.lastLogin === 'Nunca' ? new Date(0) : new Date(a.lastLoginRaw);
+                const dB = b.lastLogin === 'Nunca' ? new Date(0) : new Date(b.lastLoginRaw);
+                return dB - dA;
+            }); break;
+            case 'alphabetical': sortedUsers.sort((a, b) => a.userName.localeCompare(b.userName)); break;
+            case 'completed': sortedUsers.sort((a, b) => b.completedCount - a.completedCount); break;
         }
-
         renderUsersTable(sortedUsers);
     }
 
     function renderUsersTable(users) {
         const container = document.getElementById('users-table');
-
         let tableHTML = `
         <table class="users-table">
             <thead>
                 <tr>
-                    <th>Usuário</th>
-                    <th>Nível</th>
-                    <th>Progresso</th>
-                    <th>Vídeos Concluídos</th>
-                    <th>Último Acesso</th>
+                    <th>Usuário</th><th>Nível</th><th>Progresso</th><th>Vídeos Concluídos</th><th>Último Acesso</th>
                 </tr>
             </thead>
-            <tbody>
-    `;
+            <tbody>`;
 
         users.forEach(user => {
             let levelClass = '';
@@ -1395,9 +1247,7 @@
                 <td><strong>${user.userName}</strong></td>
                 <td><span class="user-level-badge ${levelClass}">${user.accessInfo.level_name}</span></td>
                 <td>
-                    <div class="progress-bar">
-                        <div class="progress-fill" style="width: ${user.progressPercent}%"></div>
-                    </div>
+                    <div class="progress-bar"><div class="progress-fill" style="width: ${user.progressPercent}%"></div></div>
                     <small style="color: var(--text-gray); margin-top: 5px; display: block;">${user.progressPercent}%</small>
                 </td>
                 <td><strong>${user.completedCount}</strong> / ${user.totalVideos}</td>
@@ -1407,265 +1257,53 @@
                         ${user.lastLogin}
                     </div>
                 </td>
-            </tr>
-        `;
+            </tr>`;
         });
 
-        tableHTML += `
-            </tbody>
-        </table>
-    `;
-
+        tableHTML += '</tbody></table>';
         container.innerHTML = tableHTML;
     }
 
-    function createFolderCard(folder) {
-        const card = document.createElement('div');
-        card.className = 'folder-card';
-
-        const filesCount = allFiles.filter(f => f.folder_id === folder.id).length;
-
-        card.innerHTML = `
-        <div class="folder-icon">
-            <i class="fa-solid fa-folder"></i>
-        </div>
-        <h3>${folder.name}</h3>
-        <p>${folder.description || 'Sem descrição'}</p>
-        <div class="folder-files-count">
-            <i class="fa-solid fa-file"></i>
-            <span>${filesCount} ${filesCount === 1 ? 'arquivo' : 'arquivos'}</span>
-        </div>
-    `;
-
-        card.addEventListener('click', () => {
-            openFolderModal(folder);
-        });
-
-        return card;
-    }
-
-    async function openFolderModal(folder) {
-        currentFolder = folder;
-        const modal = document.getElementById('folder-modal');
-        const loading = document.getElementById('folder-files-loading');
-        const container = document.getElementById('folder-files-container');
-        const noFiles = document.getElementById('folder-no-files');
-
-        document.getElementById('folder-modal-title').textContent = folder.name;
-        document.getElementById('folder-modal-description').textContent = folder.description || 'Sem descrição';
-
-        loading.style.display = 'block';
-        container.innerHTML = '';
-        noFiles.style.display = 'none';
-
-        modal.classList.add('active');
-        document.body.style.overflow = 'hidden';
-
-        try {
-            const folderFiles = allFiles.filter(f => f.folder_id === folder.id);
-
-            loading.style.display = 'none';
-
-            if (folderFiles.length === 0) {
-                noFiles.style.display = 'block';
-                return;
-            }
-
-            folderFiles.forEach(file => {
-                const fileCard = createFolderFileCard(file);
-                container.appendChild(fileCard);
-            });
-
-        } catch (error) {
-            console.error('Erro ao carregar arquivos da pasta:', error);
-            loading.style.display = 'none';
-            container.innerHTML = '<div class="empty-state"><p style="color: #e74c3c;">Erro ao carregar arquivos</p></div>';
-        }
-    }
-
-    function createFolderFileCard(file) {
-        const card = document.createElement('div');
-        card.className = 'folder-file-card';
-
-        const icon = getFileIcon(file.name);
-
-        card.innerHTML = `
-        <div class="folder-file-icon">${icon}</div>
-        <div class="folder-file-info">
-            <h4>${file.name}</h4>
-            ${file.description ? `<p>${file.description}</p>` : ''}
-        </div>
-        <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn-download-small" title="Baixar arquivo">
-            <i class="fa-solid fa-download"></i>
-        </button>
-    `;
-
-        return card;
-    }
-
-    function closeFolderModal() {
-        const modal = document.getElementById('folder-modal');
-        modal.classList.remove('active');
-        document.body.style.overflow = 'auto';
-        currentFolder = null;
-    }
-
-    function initAntiInspect() {
-        const REDIRECT_URL = 'https://www.psiquebrasilia.com.br';
-
-        document.addEventListener('contextmenu', (e) => {
-            e.preventDefault();
-            return false;
-        });
-
-        document.addEventListener('keydown', (e) => {
-            const key = e.key;
-
-            if (key === 'F12') {
-                e.preventDefault();
-                return false;
-            }
-
-            if (e.ctrlKey && e.shiftKey && ['i', 'I', 'j', 'J', 'c', 'C'].includes(key)) {
-                e.preventDefault();
-                return false;
-            }
-
-            if (e.ctrlKey && (key === 'u' || key === 'U')) {
-                e.preventDefault();
-                return false;
-            }
-        });
-    }
-
-    document.getElementById('files-search')?.addEventListener('input', handleFilesSearch);
-    document.getElementById('clear-search')?.addEventListener('click', clearFilesSearch);
-
-    function handleFilesSearch(e) {
-        const searchTerm = e.target.value.toLowerCase().trim();
-        const clearBtn = document.getElementById('clear-search');
-        const container = document.getElementById('files-container');
-        const noResults = document.getElementById('no-search-results');
-        const noFiles = document.getElementById('no-files');
-
-        if (searchTerm) {
-            clearBtn.style.display = 'flex';
-        } else {
-            clearBtn.style.display = 'none';
-            noResults.style.display = 'none';
-            noFiles.style.display = allFolders.length === 0 && allFiles.filter(f => !f.folder_id).length === 0 ? 'block' : 'none';
-            loadFiles();
-            return;
-        }
-
-        const filteredFolders = allFolders.filter(folder =>
-            folder.name.toLowerCase().includes(searchTerm) ||
-            (folder.description && folder.description.toLowerCase().includes(searchTerm))
-        );
-
-        const standaloneFiles = allFiles.filter(file =>
-            !file.folder_id && (
-                file.name.toLowerCase().includes(searchTerm) ||
-                (file.description && file.description.toLowerCase().includes(searchTerm))
-            )
-        );
-
-        const filesInsideFolders = allFiles.filter(file =>
-            file.folder_id && (
-                file.name.toLowerCase().includes(searchTerm) ||
-                (file.description && file.description.toLowerCase().includes(searchTerm))
-            )
-        );
-
-        container.innerHTML = '';
-        noFiles.style.display = 'none';
-
-        const totalResults = filteredFolders.length + standaloneFiles.length + filesInsideFolders.length;
-
-        if (totalResults === 0) {
-            noResults.style.display = 'block';
-        } else {
-            noResults.style.display = 'none';
-
-            filteredFolders.forEach(folder => {
-                const card = createFolderCard(folder);
-                container.appendChild(card);
-            });
-
-            standaloneFiles.forEach(file => {
-                const card = createFileCard(file);
-                container.appendChild(card);
-            });
-
-            filesInsideFolders.forEach(file => {
-                const parentFolder = allFolders.find(f => f.id === file.folder_id);
-                const card = createFileCardWithFolder(file, parentFolder);
-                container.appendChild(card);
-            });
-        }
-    }
-
-    function createFileCardWithFolder(file, parentFolder) {
-        const card = document.createElement('div');
-        card.className = 'file-card';
-
-        const icon = getFileIcon(file.name);
-
-        card.innerHTML = `
-        <div class="file-icon">${icon}</div>
-        ${parentFolder ? `
-            <div class="badge" style="margin-bottom: 8px; background: rgba(107, 155, 124, 0.15); color: var(--primary); display: flex; align-items: center; gap: 6px;">
-                <i class="fa-solid fa-folder" style="font-size: 12px;"></i>
-                <span>${parentFolder.name}</span>
-            </div>
-        ` : ''}
-        <h3>${file.name}</h3>
-        <p>${file.description || 'Sem descrição'}</p>
-        <button onclick="downloadFile('${file.file_url}', '${file.name}')" class="btn">
-        <i class="fa-solid fa-download"></i>
-        </button>
-    `;
-
-        return card;
-    }
-
-
-    function clearFilesSearch() {
-        const searchInput = document.getElementById('files-search');
-        const clearBtn = document.getElementById('clear-search');
-        const noResults = document.getElementById('no-search-results');
-
-        searchInput.value = '';
-        clearBtn.style.display = 'none';
-        noResults.style.display = 'none';
-
-        loadFiles();
-    }
-
-    function isVideoLocked(video, index) {
-        if (video.unlocked === true) return false;
-
-        if (index === 0) return false;
-
-        const previousVideo = allVideos[index - 1];
-        if (previousVideo && completedVideoIds.includes(previousVideo.id)) {
-            return false;
-        }
-
-        return true;
-    }
-
     document.querySelectorAll('.admin-tab').forEach(tab => {
-        tab.addEventListener('click', () => {
+        tab.addEventListener('click', (e) => {
             const target = tab.dataset.adminTab;
-            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
-            document.querySelectorAll('.admin-tab-content').forEach(c => c.classList.remove('active'));
-            tab.classList.add('active');
-            document.getElementById('tab-' + target).classList.add('active');
 
-            if (target === 'videos-mgmt') loadVideosMgmt();
-            if (target === 'materials-mgmt') loadMaterialsMgmt();
-            if (target === 'users-mgmt') loadUsersMgmt();
+            if (tab.classList.contains('active')) return;
+
+            const ripple = document.createElement('span');
+            ripple.className = 'tab-ripple';
+            const rect = tab.getBoundingClientRect();
+            const size = Math.max(rect.width, rect.height);
+            ripple.style.cssText = `
+                width: ${size}px; height: ${size}px;
+                left: ${e.clientX - rect.left - size / 2}px;
+                top: ${e.clientY - rect.top - size / 2}px;
+            `;
+            tab.appendChild(ripple);
+            ripple.addEventListener('animationend', () => ripple.remove());
+
+            const currentContent = document.querySelector('.admin-tab-content.active');
+            if (currentContent) {
+                currentContent.classList.add('tab-leaving');
+                currentContent.addEventListener('animationend', () => {
+                    currentContent.classList.remove('active', 'tab-leaving');
+                }, { once: true });
+            }
+
+            document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+
+            setTimeout(() => {
+                const newContent = document.getElementById('tab-' + target);
+                newContent.classList.add('active', 'tab-entering');
+                newContent.addEventListener('animationend', () => {
+                    newContent.classList.remove('tab-entering');
+                }, { once: true });
+
+                if (target === 'videos-mgmt') loadVideosMgmt();
+                if (target === 'materials-mgmt') loadMaterialsMgmt();
+                if (target === 'users-mgmt') loadUsersMgmt();
+            }, 80);
         });
     });
 
@@ -1708,6 +1346,22 @@
     let _vgLinkedFiles = [];
     let _svLinkedFiles = [];
     let _allFilesForPicker = [];
+    let _videosMgmtData = [];
+    let _materialsMgmtFiles = [];
+    let _videosMgmtFilter = 'all';
+    let _materialsMgmtFilter = 'all';
+
+    function setupMgmtLevelFilter(filterId, onFilter) {
+        const container = document.getElementById(filterId);
+        if (!container) return;
+        container.querySelectorAll('.mgmt-filter-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                container.querySelectorAll('.mgmt-filter-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                onFilter(btn.dataset.level);
+            });
+        });
+    }
 
     async function loadVideosMgmt() {
         const loading = document.getElementById('videos-mgmt-loading');
@@ -1720,11 +1374,7 @@
             .select('*, access_levels(name)')
             .order('order_index', { ascending: true });
 
-        if (vErr) {
-            showToast('❌ Erro ao carregar vídeos: ' + vErr.message);
-            loading.style.display = 'none';
-            return;
-        }
+        if (vErr) { showToast('❌ Erro ao carregar vídeos: ' + vErr.message); loading.style.display = 'none'; return; }
 
         loading.style.display = 'none';
 
@@ -1733,19 +1383,43 @@
             return;
         }
 
-        const hierarchy = organizeVideoHierarchy(videos);
+        _videosMgmtData = videos;
 
-        const hint = document.createElement('div');
-        hint.className = 'drag-hint';
-        hint.innerHTML = '<i class="fa-solid fa-up-down"></i> Arraste os grupos para reordenar';
-        list.appendChild(hint);
+        setupMgmtLevelFilter('videos-mgmt-filter', (level) => {
+            _videosMgmtFilter = level;
+            renderVideosMgmtList(list, _videosMgmtData, _videosMgmtFilter);
+        });
+
+        renderVideosMgmtList(list, videos, _videosMgmtFilter);
+    }
+
+    function renderVideosMgmtList(list, videos, filterLevel) {
+        list.innerHTML = '';
+
+        const filtered = filterLevel === 'all'
+            ? videos
+            : videos.filter(v => String(v.access_level_id) === String(filterLevel));
+
+        if (!filtered.length) {
+            list.innerHTML = '<div class="empty-state"><p>Nenhum vídeo para este nível.</p></div>';
+            return;
+        }
+
+        const hierarchy = organizeVideoHierarchy(filtered);
+
+        if (filterLevel === 'all') {
+            const hint = document.createElement('div');
+            hint.className = 'drag-hint';
+            hint.innerHTML = '<i class="fa-solid fa-up-down"></i> Arraste os grupos para reordenar';
+            list.appendChild(hint);
+        }
 
         hierarchy.forEach(group => {
             const groupEl = document.createElement('div');
             groupEl.className = 'mgmt-video-group draggable-group';
             groupEl.dataset.videoId = group.main.id;
-
             const main = group.main;
+
             groupEl.innerHTML = `
                 <div class="mgmt-video-group-header">
                     <div class="mgmt-video-info">
@@ -1767,8 +1441,7 @@
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
-                </div>
-            `;
+                </div>`;
 
             if (group.children.length > 0) {
                 const subList = document.createElement('div');
@@ -1788,8 +1461,7 @@
                             <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-video" data-id="${child.id}" data-title="${child.title}">
                                 <i class="fa-solid fa-trash"></i>
                             </button>
-                        </div>
-                    `;
+                        </div>`;
                     subList.appendChild(childEl);
                 });
                 groupEl.appendChild(subList);
@@ -1798,7 +1470,7 @@
             list.appendChild(groupEl);
         });
 
-        initVideoDragAndDrop(list);
+        if (filterLevel === 'all') initVideoDragAndDrop(list);
 
         list.querySelectorAll('[data-action="add-sub"]').forEach(btn => {
             btn.addEventListener('click', () => openSubVideoModal(null, parseInt(btn.dataset.id)));
@@ -1810,60 +1482,103 @@
             btn.addEventListener('click', () => {
                 confirmDelete(`Excluir "${btn.dataset.title}"? Sub-vídeos e progressos vinculados também serão removidos.`, async () => {
                     await deleteVideo(parseInt(btn.dataset.id));
-                    loadVideosMgmt();
+                    _videosMgmtData = _videosMgmtData.filter(v => v.id !== parseInt(btn.dataset.id));
+                    renderVideosMgmtList(list, _videosMgmtData, _videosMgmtFilter);
                 });
             });
         });
     }
 
     function initVideoDragAndDrop(list) {
-        if (typeof Sortable === 'undefined') {
-            console.warn('SortableJS não carregado, drag desabilitado');
-            return;
-        }
+        if (typeof Sortable === 'undefined') { console.warn('SortableJS não carregado'); return; }
         Sortable.create(list, {
             animation: 150,
             handle: '.drag-handle',
             ghostClass: 'drag-over',
             dragClass: 'dragging',
             filter: '.drag-hint',
-            onEnd: async () => {
-                await saveVideoOrder(list);
-            }
+            onEnd: async () => await saveVideoOrder(list)
         });
     }
 
     async function saveVideoOrder(list) {
         const groups = [...list.querySelectorAll('.draggable-group')];
-        const updates = groups.map((el, idx) => ({
-            id: parseInt(el.dataset.videoId),
-            order_index: idx
-        }));
 
-        const promises = updates.map(u =>
-            supabase.from('videos').update({ order_index: u.order_index }).eq('id', u.id)
-        );
-        const results = await Promise.all(promises);
-        const errs = results.filter(r => r.error);
-        if (errs.length > 0) {
-            showToast('❌ Erro ao salvar ordem: ' + errs[0].error.message);
-        } else {
-            showToast('✅ Ordem salva!');
+        const updates = [];
+
+        for (let i = 0; i < groups.length; i++) {
+            const groupEl = groups[i];
+            const videoId = parseInt(groupEl.dataset.videoId);
+            const newOrder = i + 1;
+
+            updates.push({
+                id: videoId,
+                order_index: newOrder,
+                section_number: String(newOrder)
+            });
+
+            const subItems = [...groupEl.querySelectorAll('.mgmt-sub-item')];
+            subItems.forEach((subEl, j) => {
+                const subId = subEl.querySelector('[data-action="edit-video"]')?.dataset?.id
+                    || subEl.querySelector('[data-action="delete-video"]')?.dataset?.id;
+                if (!subId) return;
+                updates.push({
+                    id: parseInt(subId),
+                    order_index: newOrder,
+                    section_number: `${newOrder}.${j + 1}`
+                });
+            });
         }
+
+        const btn = document.querySelector('.drag-hint');
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin"></i> Salvando ordem...';
+
+        for (const u of updates) {
+            const { error } = await supabase
+                .from('videos')
+                .update({ order_index: u.order_index, section_number: u.section_number })
+                .eq('id', u.id);
+
+            if (error) {
+                showToast('❌ Erro ao salvar ordem: ' + error.message);
+                if (btn) btn.innerHTML = '<i class="fa-solid fa-up-down"></i> Arraste os grupos para reordenar';
+                return;
+            }
+        }
+
+        groups.forEach((groupEl, i) => {
+            const newOrder = i + 1;
+            groupEl.querySelector('.mgmt-section-badge').textContent = newOrder;
+            const subItems = [...groupEl.querySelectorAll('.mgmt-sub-item')];
+            subItems.forEach((subEl, j) => {
+                const badge = subEl.querySelector('.mgmt-section-badge');
+                if (badge) badge.textContent = `${newOrder}.${j + 1}`;
+            });
+        });
+
+        if (btn) btn.innerHTML = '<i class="fa-solid fa-up-down"></i> Arraste os grupos para reordenar';
+        showToast('✅ Ordem salva!');
     }
 
     async function deleteVideo(videoId) {
-        await supabase.from('video_files').delete().eq('video_id', videoId);
-        await supabase.from('video_progress').delete().eq('video_id', videoId);
+        const steps = [
+            () => supabase.from('video_files').delete().eq('video_id', videoId),
+            () => supabase.from('video_progress').delete().eq('video_id', videoId),
+        ];
         const { data: subs } = await supabase.from('videos').select('id').eq('parent_video_id', videoId);
-        if (subs) {
-            for (const sub of subs) {
-                await supabase.from('video_files').delete().eq('video_id', sub.id);
-                await supabase.from('video_progress').delete().eq('video_id', sub.id);
-                await supabase.from('videos').delete().eq('id', sub.id);
-            }
+        for (const sub of (subs || [])) {
+            steps.push(
+                () => supabase.from('video_files').delete().eq('video_id', sub.id),
+                () => supabase.from('video_progress').delete().eq('video_id', sub.id),
+                () => supabase.from('videos').delete().eq('id', sub.id)
+            );
         }
-        await supabase.from('videos').delete().eq('id', videoId);
+        steps.push(() => supabase.from('videos').delete().eq('id', videoId));
+
+        for (const step of steps) {
+            const { error } = await step();
+            if (error) { showToast('❌ Erro ao excluir: ' + error.message); return; }
+        }
         showToast('🗑️ Vídeo excluído.');
     }
 
@@ -1872,37 +1587,51 @@
         _allFilesForPicker = data || [];
     }
 
-    let _thumbnailPickerTarget = null;
+    async function loadThumbnailPickerInline(prefix) {
+        const section = document.getElementById(`${prefix}-thumbnail-section`);
+        const bucketSelect = document.getElementById(`${prefix}-bucket-select`);
+        const grid = document.getElementById(`${prefix}-thumb-grid`);
+        const loadingEl = document.getElementById(`${prefix}-thumb-loading`);
 
-    async function openThumbnailPicker(prefix) {
-        _thumbnailPickerTarget = prefix;
-        const loading = document.getElementById('thumbnail-picker-loading');
-        const grid = document.getElementById('thumbnail-picker-grid');
-        const empty = document.getElementById('thumbnail-picker-empty');
+        if (!section || !bucketSelect || !grid) return;
+
+        const isVisible = section.style.display !== 'none' && section.style.display !== '';
+        if (isVisible) { section.style.display = 'none'; return; }
+
+        section.style.display = 'block';
+        grid.innerHTML = '';
+        loadingEl.style.display = 'flex';
+
+        const bucketName = bucketSelect.value || 'thumbnail';
+        await renderThumbnailGrid(prefix, bucketName);
+    }
+
+    async function renderThumbnailGrid(prefix, bucketName) {
+        const grid = document.getElementById(`${prefix}-thumb-grid`);
+        const loadingEl = document.getElementById(`${prefix}-thumb-loading`);
+        const emptyEl = document.getElementById(`${prefix}-thumb-empty`);
 
         grid.innerHTML = '';
-        empty.style.display = 'none';
-        loading.style.display = 'flex';
-        openMgmtModal('modal-thumbnail-picker');
+        if (emptyEl) emptyEl.style.display = 'none';
+        loadingEl.style.display = 'flex';
 
         try {
             const { data: files, error } = await supabase.storage
-                .from('thumbnail')
+                .from(bucketName)
                 .list('', { limit: 200, offset: 0 });
 
-            loading.style.display = 'none';
-
+            loadingEl.style.display = 'none';
             if (error) throw error;
 
             const images = (files || []).filter(f => f.name && /\.(png|jpg|jpeg|webp|gif)$/i.test(f.name));
 
-            if (images.length === 0) {
-                empty.style.display = 'block';
+            if (!images.length) {
+                if (emptyEl) emptyEl.style.display = 'block';
                 return;
             }
 
             images.forEach(file => {
-                const { data: urlData } = supabase.storage.from('thumbnail').getPublicUrl(file.name);
+                const { data: urlData } = supabase.storage.from(bucketName).getPublicUrl(file.name);
                 const url = urlData?.publicUrl;
                 if (!url) return;
 
@@ -1912,15 +1641,15 @@
                 div.innerHTML = `<img src="${url}" alt="${file.name}" loading="lazy">`;
                 div.addEventListener('click', () => {
                     selectThumbnail(url, prefix);
-                    closeMgmtModal('modal-thumbnail-picker');
+                    document.getElementById(`${prefix}-thumbnail-section`).style.display = 'none';
                 });
                 grid.appendChild(div);
             });
         } catch (err) {
-            loading.style.display = 'none';
-            empty.style.display = 'block';
-            console.error('Erro ao listar bucket thumbnail:', err);
-            showToast('❌ Erro ao acessar bucket: ' + err.message);
+            loadingEl.style.display = 'none';
+            if (emptyEl) emptyEl.style.display = 'block';
+            console.error(`Erro ao listar bucket "${bucketName}":`, err);
+            showToast('❌ Bucket não encontrado ou sem acesso: ' + bucketName);
         }
     }
 
@@ -1928,18 +1657,14 @@
         document.getElementById(`${prefix}-thumbnail`).value = url;
         const img = document.getElementById(`${prefix}-thumbnail-img`);
         const placeholder = document.getElementById(`${prefix}-thumbnail-placeholder`);
-        if (img) {
-            img.src = url;
-            img.style.display = 'block';
-        }
+        if (img) { img.src = url; img.style.display = 'block'; }
         if (placeholder) placeholder.style.display = 'none';
     }
 
-    document.getElementById('btn-pick-vg-thumbnail')?.addEventListener('click', () => openThumbnailPicker('vg'));
-    document.getElementById('btn-pick-sv-thumbnail')?.addEventListener('click', () => openThumbnailPicker('sv'));
-    document.getElementById('close-modal-thumbnail-picker')?.addEventListener('click', () => closeMgmtModal('modal-thumbnail-picker'));
-    document.getElementById('backdrop-thumbnail-picker')?.addEventListener('click', () => closeMgmtModal('modal-thumbnail-picker'));
-    document.getElementById('cancel-thumbnail-picker')?.addEventListener('click', () => closeMgmtModal('modal-thumbnail-picker'));
+    function setupBucketSelectListener(prefix) {
+        const sel = document.getElementById(`${prefix}-bucket-select`);
+        sel?.addEventListener('change', () => renderThumbnailGrid(prefix, sel.value));
+    }
 
     async function getVideoLinkedFiles(videoId) {
         const { data } = await supabase
@@ -1964,20 +1689,15 @@
                 <input type="number" class="linked-file-order" data-index="${i}" value="${lf.display_order || i + 1}" min="1" style="width:70px;" placeholder="Ordem">
                 <button type="button" class="btn-icon btn-icon-danger linked-file-remove" data-index="${i}">
                     <i class="fa-solid fa-xmark"></i>
-                </button>
-            `;
+                </button>`;
             container.appendChild(row);
         });
 
         container.querySelectorAll('.linked-file-select').forEach(sel => {
-            sel.addEventListener('change', (e) => {
-                linkedFiles[parseInt(e.target.dataset.index)].file_id = parseInt(e.target.value) || null;
-            });
+            sel.addEventListener('change', e => { linkedFiles[parseInt(e.target.dataset.index)].file_id = parseInt(e.target.value) || null; });
         });
         container.querySelectorAll('.linked-file-order').forEach(inp => {
-            inp.addEventListener('change', (e) => {
-                linkedFiles[parseInt(e.target.dataset.index)].display_order = parseInt(e.target.value) || 1;
-            });
+            inp.addEventListener('change', e => { linkedFiles[parseInt(e.target.dataset.index)].display_order = parseInt(e.target.value) || 1; });
         });
         container.querySelectorAll('.linked-file-remove').forEach(btn => {
             btn.addEventListener('click', () => {
@@ -1992,18 +1712,19 @@
         _editingVideoId = null;
         _vgLinkedFiles = [];
         document.getElementById('modal-video-group-title').textContent = 'Novo Grupo de Vídeos';
-        ['vg-title', 'vg-description', 'vg-url', 'vg-section', 'vg-order'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
+        ['vg-title', 'vg-description', 'vg-url', 'vg-section', 'vg-order'].forEach(id => { document.getElementById(id).value = ''; });
         document.getElementById('vg-thumbnail').value = '';
         const vgImg = document.getElementById('vg-thumbnail-img');
         const vgPlaceholder = document.getElementById('vg-thumbnail-placeholder');
         if (vgImg) { vgImg.src = ''; vgImg.style.display = 'none'; }
         if (vgPlaceholder) vgPlaceholder.style.display = 'inline';
+        const vgSection = document.getElementById('vg-thumbnail-section');
+        if (vgSection) vgSection.style.display = 'none';
 
         document.getElementById('vg-unlocked').checked = false;
         document.getElementById('vg-access-level').value = '1';
         renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+        setupBucketSelectListener('vg');
         openMgmtModal('modal-video-group');
     });
 
@@ -2011,6 +1732,8 @@
         _vgLinkedFiles.push({ file_id: null, display_order: _vgLinkedFiles.length + 1 });
         renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
     });
+
+    document.getElementById('btn-pick-vg-thumbnail')?.addEventListener('click', () => loadThumbnailPickerInline('vg'));
 
     async function openEditVideoModal(videoId, parentId = null) {
         await loadFilesForPicker();
@@ -2028,15 +1751,17 @@
         document.getElementById(`${prefix}-title`).value = video.title || '';
         document.getElementById(`${prefix}-description`).value = video.description || '';
         document.getElementById(`${prefix}-url`).value = video.video_url || '';
+
         const thumbUrl = video.thumbnail_url || '';
         document.getElementById(`${prefix}-thumbnail`).value = thumbUrl;
         const thumbImg = document.getElementById(`${prefix}-thumbnail-img`);
         const thumbPlaceholder = document.getElementById(`${prefix}-thumbnail-placeholder`);
-        if (thumbImg) {
-            thumbImg.src = thumbUrl;
-            thumbImg.style.display = thumbUrl ? 'block' : 'none';
-        }
+        if (thumbImg) { thumbImg.src = thumbUrl; thumbImg.style.display = thumbUrl ? 'block' : 'none'; }
         if (thumbPlaceholder) thumbPlaceholder.style.display = thumbUrl ? 'none' : 'inline';
+
+        const thumbSection = document.getElementById(`${prefix}-thumbnail-section`);
+        if (thumbSection) thumbSection.style.display = 'none';
+
         document.getElementById(`${prefix}-section`).value = video.section_number || '';
         document.getElementById(`${prefix}-order`).value = video.order_index ?? '';
         document.getElementById(`${prefix}-unlocked`).checked = !!video.unlocked;
@@ -2051,6 +1776,7 @@
             renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
         }
 
+        setupBucketSelectListener(prefix);
         openMgmtModal(modalId);
     }
 
@@ -2101,16 +1827,10 @@
         const linkedFiles = isGroup ? _vgLinkedFiles : _svLinkedFiles;
         const validFiles = linkedFiles.filter(lf => lf.file_id && parseInt(lf.file_id) > 0);
         if (validFiles.length > 0) {
-            const { error: vfError } = await supabase.from('video_files').insert(validFiles.map((lf, idx) => ({
-                video_id: videoId,
-                file_id: parseInt(lf.file_id),
-                display_order: lf.display_order || (idx + 1)
-            })));
-            if (vfError) {
-                console.error('Erro ao vincular arquivos:', vfError);
-                showToast('⚠️ Vídeo salvo, mas houve erro ao vincular arquivos: ' + vfError.message);
-                return true;
-            }
+            const { error: vfError } = await supabase.from('video_files').insert(
+                validFiles.map((lf, idx) => ({ video_id: videoId, file_id: parseInt(lf.file_id), display_order: lf.display_order || (idx + 1) }))
+            );
+            if (vfError) { showToast('⚠️ Vídeo salvo, mas erro ao vincular arquivos: ' + vfError.message); return true; }
         }
 
         showToast('✅ Vídeo salvo!');
@@ -2130,15 +1850,16 @@
         _editingVideoId = videoId;
         _editingParentId = parentId;
         _svLinkedFiles = videoId ? await getVideoLinkedFiles(videoId) : [];
+
         document.getElementById('modal-sub-video-title').textContent = videoId ? 'Editar Sub-Vídeo' : 'Novo Sub-Vídeo';
-        ['sv-title', 'sv-description', 'sv-url', 'sv-section', 'sv-order'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
+        ['sv-title', 'sv-description', 'sv-url', 'sv-section', 'sv-order'].forEach(id => { document.getElementById(id).value = ''; });
         document.getElementById('sv-thumbnail').value = '';
         const svImg = document.getElementById('sv-thumbnail-img');
         const svPlaceholder = document.getElementById('sv-thumbnail-placeholder');
         if (svImg) { svImg.src = ''; svImg.style.display = 'none'; }
         if (svPlaceholder) svPlaceholder.style.display = 'inline';
+        const svSection = document.getElementById('sv-thumbnail-section');
+        if (svSection) svSection.style.display = 'none';
 
         document.getElementById('sv-unlocked').checked = false;
 
@@ -2158,6 +1879,7 @@
             }
         }
         renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+        setupBucketSelectListener('sv');
         openMgmtModal('modal-sub-video');
     }
 
@@ -2165,6 +1887,8 @@
         _svLinkedFiles.push({ file_id: null, display_order: _svLinkedFiles.length + 1 });
         renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
     });
+
+    document.getElementById('btn-pick-sv-thumbnail')?.addEventListener('click', () => loadThumbnailPickerInline('sv'));
 
     document.getElementById('save-sub-video').addEventListener('click', async () => {
         const btn = document.getElementById('save-sub-video');
@@ -2190,15 +1914,39 @@
         ]);
 
         _allFoldersMgmt = foldersRes.data || [];
-        const files = filesRes.data || [];
+        _materialsMgmtFiles = filesRes.data || [];
         loading.style.display = 'none';
 
-        if (_allFoldersMgmt.length === 0 && files.length === 0) {
+        if (!_allFoldersMgmt.length && !_materialsMgmtFiles.length) {
             list.innerHTML = '<div class="empty-state"><p>Nenhum material cadastrado.</p></div>';
             return;
         }
 
-        _allFoldersMgmt.forEach(folder => {
+        setupMgmtLevelFilter('materials-mgmt-filter', (level) => {
+            _materialsMgmtFilter = level;
+            renderMaterialsMgmtList(list, _allFoldersMgmt, _materialsMgmtFiles, _materialsMgmtFilter);
+        });
+
+        renderMaterialsMgmtList(list, _allFoldersMgmt, _materialsMgmtFiles, _materialsMgmtFilter);
+    }
+
+    function renderMaterialsMgmtList(list, folders, files, filterLevel) {
+        list.innerHTML = '';
+
+        const filteredFolders = filterLevel === 'all'
+            ? folders
+            : folders.filter(f => String(f.access_level_id) === String(filterLevel));
+
+        const filteredStandalone = filterLevel === 'all'
+            ? files.filter(f => !f.folder_id)
+            : files.filter(f => !f.folder_id && String(f.access_level_id) === String(filterLevel));
+
+        if (!filteredFolders.length && !filteredStandalone.length) {
+            list.innerHTML = '<div class="empty-state"><p>Nenhum material para este nível.</p></div>';
+            return;
+        }
+
+        filteredFolders.forEach(folder => {
             const folderFiles = files.filter(f => f.folder_id === folder.id);
             const el = document.createElement('div');
             el.className = 'mgmt-video-group';
@@ -2222,8 +1970,7 @@
                             <i class="fa-solid fa-trash"></i>
                         </button>
                     </div>
-                </div>
-            `;
+                </div>`;
 
             if (folderFiles.length > 0) {
                 const subList = document.createElement('div');
@@ -2237,14 +1984,9 @@
                             <span>${file.name}</span>
                         </div>
                         <div class="mgmt-actions">
-                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}">
-                                <i class="fa-solid fa-pen"></i>
-                            </button>
-                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
-                        </div>
-                    `;
+                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}"><i class="fa-solid fa-trash"></i></button>
+                        </div>`;
                     subList.appendChild(fileEl);
                 });
                 el.appendChild(subList);
@@ -2252,13 +1994,12 @@
             list.appendChild(el);
         });
 
-        const standalone = files.filter(f => !f.folder_id);
-        if (standalone.length > 0) {
+        if (filteredStandalone.length > 0) {
             const section = document.createElement('div');
             section.innerHTML = `<div class="mgmt-section-label"><i class="fa-solid fa-file"></i> Arquivos Avulsos</div>`;
             list.appendChild(section);
 
-            standalone.forEach(file => {
+            filteredStandalone.forEach(file => {
                 const el = document.createElement('div');
                 el.className = 'mgmt-video-group';
                 el.innerHTML = `
@@ -2271,15 +2012,10 @@
                             </div>
                         </div>
                         <div class="mgmt-actions">
-                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}">
-                                <i class="fa-solid fa-pen"></i>
-                            </button>
-                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}">
-                                <i class="fa-solid fa-trash"></i>
-                            </button>
+                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}"><i class="fa-solid fa-pen"></i></button>
+                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}"><i class="fa-solid fa-trash"></i></button>
                         </div>
-                    </div>
-                `;
+                    </div>`;
                 list.appendChild(el);
             });
         }
@@ -2358,9 +2094,7 @@
     async function openFileMgmtModal(fileId, presetFolderId = null) {
         _editingFileId = fileId;
         document.getElementById('modal-file-mgmt-title').textContent = fileId ? 'Editar Arquivo' : 'Novo Arquivo';
-        ['file-mgmt-name', 'file-mgmt-description', 'file-mgmt-url', 'file-mgmt-order'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
+        ['file-mgmt-name', 'file-mgmt-description', 'file-mgmt-url', 'file-mgmt-order'].forEach(id => { document.getElementById(id).value = ''; });
         document.getElementById('file-mgmt-access-level').value = '1';
         document.getElementById('file-mgmt-show').checked = true;
 
@@ -2434,10 +2168,7 @@
 
         loading.style.display = 'none';
 
-        if (users.length === 0) {
-            list.innerHTML = '<div class="empty-state"><p>Nenhum usuário cadastrado.</p></div>';
-            return;
-        }
+        if (!users.length) { list.innerHTML = '<div class="empty-state"><p>Nenhum usuário cadastrado.</p></div>'; return; }
 
         const levelColors = { 1: 'level-psicologos', 2: 'level-admin', 3: 'level-dev' };
 
@@ -2457,14 +2188,9 @@
                 </div>
                 <span class="user-level-badge ${levelColors[levelId] || ''}">${levelName}</span>
                 <div class="mgmt-actions">
-                    <button class="btn-icon" title="Editar" data-action="edit-user" data-id="${user.id}">
-                        <i class="fa-solid fa-pen"></i>
-                    </button>
-                    <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-user" data-id="${user.id}" data-name="${displayName}">
-                        <i class="fa-solid fa-trash"></i>
-                    </button>
-                </div>
-            `;
+                    <button class="btn-icon" title="Editar" data-action="edit-user" data-id="${user.id}"><i class="fa-solid fa-pen"></i></button>
+                    <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-user" data-id="${user.id}" data-name="${displayName}"><i class="fa-solid fa-trash"></i></button>
+                </div>`;
             list.appendChild(el);
         });
 
@@ -2496,9 +2222,7 @@
     async function openUserMgmtModal(userId) {
         _editingUserId = userId;
         document.getElementById('modal-user-mgmt-title').textContent = userId ? 'Editar Usuário' : 'Novo Usuário';
-        ['user-mgmt-fullname', 'user-mgmt-name', 'user-mgmt-email', 'user-mgmt-password'].forEach(id => {
-            document.getElementById(id).value = '';
-        });
+        ['user-mgmt-fullname', 'user-mgmt-name', 'user-mgmt-email', 'user-mgmt-password'].forEach(id => { document.getElementById(id).value = ''; });
         document.getElementById('user-mgmt-access-level').value = '1';
 
         const emailGroup = document.getElementById('user-email-group');
@@ -2517,9 +2241,7 @@
                 document.getElementById('user-mgmt-fullname').value = userRes.data.full_name || '';
                 document.getElementById('user-mgmt-name').value = userRes.data.name || '';
             }
-            if (accessRes.data) {
-                document.getElementById('user-mgmt-access-level').value = accessRes.data.access_level_id;
-            }
+            if (accessRes.data) document.getElementById('user-mgmt-access-level').value = accessRes.data.access_level_id;
         } else {
             emailGroup.style.display = 'block';
             pwHint.style.display = 'none';
@@ -2549,7 +2271,6 @@
                     full_name: fullName,
                     name: name || fullName.split(' ')[0],
                 }).eq('id', _editingUserId);
-
                 if (userErr) throw userErr;
 
                 const { data: existAccess } = await supabase.from('user_access').select('id').eq('user_id', _editingUserId).maybeSingle();
@@ -2561,31 +2282,32 @@
                     if (accErr) throw accErr;
                 }
                 showToast('✅ Usuário atualizado!');
+
             } else {
+
                 const email = document.getElementById('user-mgmt-email').value.trim();
                 const password = document.getElementById('user-mgmt-password').value;
+
                 if (!email || !password) { showToast('⚠️ Email e senha são obrigatórios.'); throw new Error('validation'); }
                 if (password.length < 6) { showToast('⚠️ Senha mínimo 6 caracteres.'); throw new Error('validation'); }
-                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-                    showToast('⚠️ Email inválido. Use o formato: nome@dominio.com'); throw new Error('validation');
-                }
+                if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { showToast('⚠️ Email inválido.'); throw new Error('validation'); }
 
                 const { data: authData, error: authError } = await supabase.auth.signUp({
                     email,
                     password,
                     options: {
-                        data: { full_name: fullName, name: name || fullName.split(' ')[0] },
-                        emailRedirectTo: undefined
+                        data: { full_name: fullName, name: name || fullName.split(' ')[0] }
                     }
                 });
 
                 if (authError) throw authError;
 
                 if (!authData?.user?.id) {
-                    throw new Error('Não foi possível criar o usuário. Verifique se o email já está cadastrado ou se a confirmação de email está desativada no Supabase.');
+                    throw new Error('Não foi possível criar o usuário. Verifique se o email já está cadastrado.');
                 }
 
                 const newId = authData.user.id;
+                const isActive = !!authData.session;
 
                 const { error: insertErr } = await supabase.from('users').upsert({
                     id: newId,
@@ -2594,20 +2316,19 @@
                 }, { onConflict: 'id' });
                 if (insertErr) throw insertErr;
 
-                const { error: accessErr } = await supabase.from('user_access').insert({
-                    user_id: newId,
-                    access_level_id: accessLevel
-                });
+                const { error: accessErr } = await supabase.from('user_access').insert({ user_id: newId, access_level_id: accessLevel });
                 if (accessErr) throw accessErr;
 
-                const needsConfirm = !authData.session;
-                showToast(needsConfirm
-                    ? '✅ Usuário criado! O usuário deve confirmar o email antes de fazer login.'
-                    : '✅ Usuário criado e ativo!'
-                );
+                if (isActive) {
+                    showToast('✅ Usuário criado e já pode fazer login!');
+                } else {
+                    showToast('⚠️ Usuário criado, mas precisa confirmar o email.\n\nPara desativar isso: Supabase > Authentication > Providers > Email > desmarque "Confirm email".');
+                }
             }
+
             closeMgmtModal('modal-user-mgmt');
             loadUsersMgmt();
+
         } catch (err) {
             if (err.message !== 'validation') {
                 console.error('Erro ao salvar usuário:', err);
@@ -2622,26 +2343,14 @@
     const style = document.createElement('style');
     style.textContent = `
     @keyframes slideInUp {
-        from {
-            transform: translateY(100px);
-            opacity: 0;
-        }
-        to {
-            transform: translateY(0);
-            opacity: 1;
-        }
+        from { transform: translateY(100px); opacity: 0; }
+        to { transform: translateY(0); opacity: 1; }
     }
     @keyframes slideOutDown {
-        from {
-            transform: translateY(0);
-            opacity: 1;
-        }
-        to {
-            transform: translateY(100px);
-            opacity: 0;
-        }
+        from { transform: translateY(0); opacity: 1; }
+        to { transform: translateY(100px); opacity: 0; }
     }
-`;
+    `;
     document.head.appendChild(style);
 
 })();

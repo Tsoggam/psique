@@ -69,8 +69,6 @@
         </nav>
 
         <div id="admin-panel" style="display: none;">
-
-            <!-- Admin Nav Tabs -->
             <div class="admin-nav">
                 <div class="admin-nav-inner">
                     <button class="admin-tab active" data-admin-tab="dashboard">
@@ -175,6 +173,11 @@
                             <i class="fa-solid fa-plus"></i> Novo Grupo de Vídeos
                         </button>
                     </div>
+                    <div class="mgmt-level-filter" id="videos-mgmt-filter">
+                        <button class="mgmt-filter-btn active" data-level="all">Todos</button>
+                        <button class="mgmt-filter-btn" data-level="1">Psicólogos</button>
+                        <button class="mgmt-filter-btn" data-level="2">Administrativo</button>
+                    </div>
                     <div id="videos-mgmt-loading" class="loading" style="display:none;">
                         <div class="spinner"></div>
                         <p>Carregando...</p>
@@ -195,6 +198,11 @@
                                 <i class="fa-solid fa-file-circle-plus"></i> Novo Arquivo Avulso
                             </button>
                         </div>
+                    </div>
+                    <div class="mgmt-level-filter" id="materials-mgmt-filter">
+                        <button class="mgmt-filter-btn active" data-level="all">Todos</button>
+                        <button class="mgmt-filter-btn" data-level="1">Psicólogos</button>
+                        <button class="mgmt-filter-btn" data-level="2">Administrativo</button>
                     </div>
                     <div id="materials-mgmt-loading" class="loading" style="display:none;">
                         <div class="spinner"></div>
@@ -256,6 +264,24 @@
                                     <i class="fa-solid fa-images"></i> Selecionar do bucket
                                 </button>
                                 <input type="hidden" id="vg-thumbnail">
+                            </div>
+                            <div id="vg-thumbnail-section" class="thumbnail-inline-section" style="display:none;">
+                                <div class="thumbnail-inline-header">
+                                    <label>Bucket:</label>
+                                    <select id="vg-bucket-select" class="bucket-select">
+                                        <option value="thumbnail">thumbnail</option>
+                                        <option value="thumbnail videos">thumbnail videos</option>
+                                    </select>
+                                </div>
+                                <div id="vg-thumb-loading" class="loading" style="display:none;padding:20px 0;">
+                                    <div class="spinner"></div>
+                                    <p>Carregando imagens...</p>
+                                </div>
+                                <div id="vg-thumb-grid" class="thumbnail-grid thumbnail-grid-inline"></div>
+                                <div id="vg-thumb-empty" class="empty-state" style="display:none;padding:16px 0;">
+                                    <i class="fa-solid fa-images empty-icon" style="font-size:1.5rem;"></i>
+                                    <p>Nenhuma imagem encontrada neste bucket</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -334,6 +360,24 @@
                                     <i class="fa-solid fa-images"></i> Selecionar do bucket
                                 </button>
                                 <input type="hidden" id="sv-thumbnail">
+                            </div>
+                            <div id="sv-thumbnail-section" class="thumbnail-inline-section" style="display:none;">
+                                <div class="thumbnail-inline-header">
+                                    <label>Bucket:</label>
+                                    <select id="sv-bucket-select" class="bucket-select">
+                                        <option value="thumbnail">thumbnail</option>
+                                        <option value="thumbnail videos">thumbnail videos</option>
+                                    </select>
+                                </div>
+                                <div id="sv-thumb-loading" class="loading" style="display:none;padding:20px 0;">
+                                    <div class="spinner"></div>
+                                    <p>Carregando imagens...</p>
+                                </div>
+                                <div id="sv-thumb-grid" class="thumbnail-grid thumbnail-grid-inline"></div>
+                                <div id="sv-thumb-empty" class="empty-state" style="display:none;padding:16px 0;">
+                                    <i class="fa-solid fa-images empty-icon" style="font-size:1.5rem;"></i>
+                                    <p>Nenhuma imagem encontrada neste bucket</p>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -705,30 +749,6 @@
                     <i class="fa-solid fa-folder-open empty-icon"></i>
                     <p>Nenhum arquivo nesta pasta</p>
                 </div>
-            </div>
-        </div>
-    </div>
-
-    <div id="modal-thumbnail-picker" class="modal">
-        <div class="modal-backdrop" id="backdrop-thumbnail-picker"></div>
-        <div class="mgmt-modal-content mgmt-modal-large">
-            <div class="mgmt-modal-header">
-                <h3><i class="fa-solid fa-images"></i> Selecionar Thumbnail</h3>
-                <button class="close-modal" id="close-modal-thumbnail-picker"><i class="fa-solid fa-xmark"></i></button>
-            </div>
-            <div class="mgmt-modal-body">
-                <div id="thumbnail-picker-loading" class="loading" style="display:none;">
-                    <div class="spinner"></div>
-                    <p>Carregando imagens...</p>
-                </div>
-                <div id="thumbnail-picker-grid" class="thumbnail-grid"></div>
-                <div id="thumbnail-picker-empty" class="empty-state" style="display:none;">
-                    <i class="fa-solid fa-images empty-icon"></i>
-                    <p>Nenhuma imagem encontrada no bucket "thumbnail"</p>
-                </div>
-            </div>
-            <div class="mgmt-modal-footer">
-                <button class="btn btn-ghost" id="cancel-thumbnail-picker">Cancelar</button>
             </div>
         </div>
     </div>
