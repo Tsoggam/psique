@@ -246,7 +246,6 @@ body {
 .screen {
     display: none;
     min-height: 100vh;
-    padding: var(--spacing-md);
     position: relative;
     z-index: 1;
 }
