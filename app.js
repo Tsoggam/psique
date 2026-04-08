@@ -122,6 +122,19 @@
         }
     }
 
+    let lastScrollY = window.scrollY;
+const topNav = document.querySelector('.top-nav');
+
+window.addEventListener('scroll', () => {
+    const currentScrollY = window.scrollY;
+    if (currentScrollY > lastScrollY && currentScrollY > 60) {
+        topNav.style.transform = 'translateY(-100%)';
+    } else {
+        topNav.style.transform = 'translateY(0)';
+    }
+    lastScrollY = currentScrollY;
+}, { passive: true });
+
     async function showMemberScreen() {
         try {
             const { data: { user } } = await supabase.auth.getUser();
@@ -169,11 +182,16 @@
                 document.querySelector('.container').style.display = 'block';
             } else if (currentUserLevel === 3) {
                 badge.innerHTML = 'Desenvolvedor';
+
                 document.getElementById('login-screen').classList.remove('active');
                 document.getElementById('member-screen').classList.add('active');
 
+                document.getElementById('top-nav-default').style.display = 'none';
                 const mainContainer = document.querySelector('#member-screen > .container');
                 if (mainContainer) mainContainer.style.display = 'none';
+
+                document.getElementById('user-badge-admin').innerHTML = 'Desenvolvedor';
+                document.getElementById('logout-btn-admin').addEventListener('click', handleLogout);
 
                 const adminPanel = document.getElementById('admin-panel');
                 if (adminPanel) {
@@ -181,6 +199,7 @@
                     adminPanel.style.visibility = 'visible';
                     adminPanel.style.opacity = '1';
                 }
+
                 await loadAdminDashboard();
                 return;
             } else {
@@ -1267,43 +1286,34 @@
     document.querySelectorAll('.admin-tab').forEach(tab => {
         tab.addEventListener('click', (e) => {
             const target = tab.dataset.adminTab;
-
             if (tab.classList.contains('active')) return;
 
             const ripple = document.createElement('span');
             ripple.className = 'tab-ripple';
             const rect = tab.getBoundingClientRect();
             const size = Math.max(rect.width, rect.height);
-            ripple.style.cssText = `
-                width: ${size}px; height: ${size}px;
-                left: ${e.clientX - rect.left - size / 2}px;
-                top: ${e.clientY - rect.top - size / 2}px;
-            `;
+            ripple.style.cssText = `width:${size}px;height:${size}px;left:${e.clientX-rect.left-size/2}px;top:${e.clientY-rect.top-size/2}px;`;
             tab.appendChild(ripple);
             ripple.addEventListener('animationend', () => ripple.remove());
-
-            const currentContent = document.querySelector('.admin-tab-content.active');
-            if (currentContent) {
-                currentContent.classList.add('tab-leaving');
-                currentContent.addEventListener('animationend', () => {
-                    currentContent.classList.remove('active', 'tab-leaving');
-                }, { once: true });
-            }
 
             document.querySelectorAll('.admin-tab').forEach(t => t.classList.remove('active'));
             tab.classList.add('active');
 
-            setTimeout(() => {
-                const newContent = document.getElementById('tab-' + target);
-                newContent.classList.add('active', 'tab-entering');
-                newContent.addEventListener('animationend', () => {
-                    newContent.classList.remove('tab-entering');
-                }, { once: true });
+            const currentContent = document.querySelector('.admin-tab-content.active');
+            const newContent = document.getElementById('tab-' + target);
 
-                if (target === 'videos-mgmt') loadVideosMgmt();
-                if (target === 'materials-mgmt') loadMaterialsMgmt();
-                if (target === 'users-mgmt') loadUsersMgmt();
-            }, 80);
+            if (currentContent && currentContent !== newContent) {
+                currentContent.classList.remove('active');
+            }
+
+            newContent.classList.add('active', 'tab-entering');
+            newContent.addEventListener('animationend', () => {
+                newContent.classList.remove('tab-entering');
+            }, { once: true });
+
+            if (target === 'videos-mgmt') loadVideosMgmt();
+            if (target === 'materials-mgmt') loadMaterialsMgmt();
+            if (target === 'users-mgmt') loadUsersMgmt();
         });
     });
 
@@ -1490,16 +1500,53 @@
     }
 
     function initVideoDragAndDrop(list) {
-        if (typeof Sortable === 'undefined') { console.warn('SortableJS não carregado'); return; }
-        Sortable.create(list, {
-            animation: 150,
-            handle: '.drag-handle',
-            ghostClass: 'drag-over',
-            dragClass: 'dragging',
-            filter: '.drag-hint',
-            onEnd: async () => await saveVideoOrder(list)
-        });
+    if (typeof Sortable === 'undefined') { console.warn('SortableJS não carregado'); return; }
+
+    let scrollFrame = null;
+    let currentY = 0;
+    const ZONE = 150;
+    const SPEED = 18;
+
+    // Atualiza Y sempre, independente de drag ativo
+    document.addEventListener('mousemove', (e) => { currentY = e.clientY; });
+
+    function startScroll() {
+        if (scrollFrame) return;
+        const navHeight = document.querySelector('.admin-nav')?.offsetHeight || 60;
+
+        function step() {
+            const fromTop = currentY - navHeight;
+            const fromBottom = window.innerHeight - currentY;
+
+            if (fromTop < ZONE && fromTop >= 0) {
+                window.scrollBy(0, -(SPEED * (1 - fromTop / ZONE)));
+            } else if (fromBottom < ZONE) {
+                window.scrollBy(0, SPEED * (1 - fromBottom / ZONE));
+            }
+            scrollFrame = requestAnimationFrame(step);
+        }
+        scrollFrame = requestAnimationFrame(step);
     }
+
+    function stopScroll() {
+        cancelAnimationFrame(scrollFrame);
+        scrollFrame = null;
+    }
+
+    Sortable.create(list, {
+        animation: 150,
+        handle: '.drag-handle',
+        ghostClass: 'drag-over',
+        dragClass: 'dragging',
+        filter: '.drag-hint',
+        scroll: false,
+        onStart: () => startScroll(),
+        onEnd: async () => {
+            stopScroll();
+            await saveVideoOrder(list);
+        }
+    });
+}
 
     async function saveVideoOrder(list) {
         const groups = [...list.querySelectorAll('.draggable-group')];
@@ -1909,7 +1956,7 @@
         list.innerHTML = '';
 
         const [foldersRes, filesRes] = await Promise.all([
-            supabase.from('folders').select('*, access_levels(name)').order('created_at', { ascending: false }),
+            supabase.from('folders').select('*, access_levels(name)').order('order_index', { ascending: true }),
             supabase.from('files').select('*, access_levels(name), folders(name)').order('order_files', { ascending: true, nullsFirst: false })
         ]);
 
@@ -1931,123 +1978,211 @@
     }
 
     function renderMaterialsMgmtList(list, folders, files, filterLevel) {
-        list.innerHTML = '';
+    list.innerHTML = '';
 
-        const filteredFolders = filterLevel === 'all'
-            ? folders
-            : folders.filter(f => String(f.access_level_id) === String(filterLevel));
+    const filteredFolders = filterLevel === 'all'
+        ? folders
+        : folders.filter(f => String(f.access_level_id) === String(filterLevel));
 
-        const filteredStandalone = filterLevel === 'all'
-            ? files.filter(f => !f.folder_id)
-            : files.filter(f => !f.folder_id && String(f.access_level_id) === String(filterLevel));
+    const filteredStandalone = filterLevel === 'all'
+        ? files.filter(f => !f.folder_id)
+        : files.filter(f => !f.folder_id && String(f.access_level_id) === String(filterLevel));
 
-        if (!filteredFolders.length && !filteredStandalone.length) {
-            list.innerHTML = '<div class="empty-state"><p>Nenhum material para este nível.</p></div>';
-            return;
+    if (!filteredFolders.length && !filteredStandalone.length) {
+        list.innerHTML = '<div class="empty-state"><p>Nenhum material para este nível.</p></div>';
+        return;
+    }
+
+    const foldersContainer = document.createElement('div');
+    foldersContainer.id = 'folders-sortable';
+
+    filteredFolders.forEach(folder => {
+        const folderFiles = files.filter(f => f.folder_id === folder.id);
+        const el = document.createElement('div');
+        el.className = 'mgmt-video-group draggable-folder';
+        el.dataset.folderId = folder.id;
+        el.innerHTML = `
+            <div class="mgmt-video-group-header">
+                <span class="drag-handle" title="Arraste para reordenar"><i class="fa-solid fa-grip-vertical"></i></span>
+                <div class="mgmt-video-info">
+                    <i class="fa-solid fa-folder" style="color: var(--primary); font-size: 1.2rem; flex-shrink:0;"></i>
+                    <div>
+                        <strong>${folder.name}</strong>
+                        <small>${folder.access_levels?.name || ''} · ${folderFiles.length} arquivo(s)</small>
+                    </div>
+                </div>
+                <div class="mgmt-actions">
+                    <button class="btn-icon" title="Adicionar arquivo" data-action="add-file-to-folder" data-folder-id="${folder.id}">
+                        <i class="fa-solid fa-file-circle-plus"></i>
+                    </button>
+                    <button class="btn-icon" title="Editar" data-action="edit-folder" data-id="${folder.id}">
+                        <i class="fa-solid fa-pen"></i>
+                    </button>
+                    <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-folder" data-id="${folder.id}" data-name="${folder.name}">
+                        <i class="fa-solid fa-trash"></i>
+                    </button>
+                </div>
+            </div>`;
+
+        if (folderFiles.length > 0) {
+            const subList = document.createElement('div');
+            subList.className = 'mgmt-sub-list';
+            folderFiles.forEach(file => {
+                const fileEl = document.createElement('div');
+                fileEl.className = 'mgmt-sub-item';
+                fileEl.innerHTML = `
+                    <div class="mgmt-video-info">
+                        <div>${getFileIcon(file.name)}</div>
+                        <span>${file.name}</span>
+                    </div>
+                    <div class="mgmt-actions">
+                        <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}"><i class="fa-solid fa-trash"></i></button>
+                    </div>`;
+                subList.appendChild(fileEl);
+            });
+            el.appendChild(subList);
         }
+        foldersContainer.appendChild(el);
+    });
 
-        filteredFolders.forEach(folder => {
-            const folderFiles = files.filter(f => f.folder_id === folder.id);
+    list.appendChild(foldersContainer);
+
+    if (filteredStandalone.length > 0) {
+        const section = document.createElement('div');
+        section.innerHTML = `<div class="mgmt-section-label"><i class="fa-solid fa-file"></i> Arquivos Avulsos</div>`;
+        list.appendChild(section);
+
+        const standaloneContainer = document.createElement('div');
+        standaloneContainer.id = 'standalone-sortable';
+
+        filteredStandalone.forEach(file => {
             const el = document.createElement('div');
-            el.className = 'mgmt-video-group';
+            el.className = 'mgmt-video-group draggable-file';
+            el.dataset.fileId = file.id;
             el.innerHTML = `
                 <div class="mgmt-video-group-header">
+                    <span class="drag-handle" title="Arraste para reordenar"><i class="fa-solid fa-grip-vertical"></i></span>
                     <div class="mgmt-video-info">
-                        <i class="fa-solid fa-folder" style="color: var(--primary); font-size: 1.2rem; flex-shrink:0;"></i>
+                        <div>${getFileIcon(file.name)}</div>
                         <div>
-                            <strong>${folder.name}</strong>
-                            <small>${folder.access_levels?.name || ''} · ${folderFiles.length} arquivo(s)</small>
+                            <strong>${file.name}</strong>
+                            <small>${file.access_levels?.name || ''}</small>
                         </div>
                     </div>
                     <div class="mgmt-actions">
-                        <button class="btn-icon" title="Adicionar arquivo" data-action="add-file-to-folder" data-folder-id="${folder.id}">
-                            <i class="fa-solid fa-file-circle-plus"></i>
-                        </button>
-                        <button class="btn-icon" title="Editar" data-action="edit-folder" data-id="${folder.id}">
-                            <i class="fa-solid fa-pen"></i>
-                        </button>
-                        <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-folder" data-id="${folder.id}" data-name="${folder.name}">
-                            <i class="fa-solid fa-trash"></i>
-                        </button>
+                        <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}"><i class="fa-solid fa-pen"></i></button>
+                        <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}"><i class="fa-solid fa-trash"></i></button>
                     </div>
                 </div>`;
-
-            if (folderFiles.length > 0) {
-                const subList = document.createElement('div');
-                subList.className = 'mgmt-sub-list';
-                folderFiles.forEach(file => {
-                    const fileEl = document.createElement('div');
-                    fileEl.className = 'mgmt-sub-item';
-                    fileEl.innerHTML = `
-                        <div class="mgmt-video-info">
-                            <div>${getFileIcon(file.name)}</div>
-                            <span>${file.name}</span>
-                        </div>
-                        <div class="mgmt-actions">
-                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}"><i class="fa-solid fa-pen"></i></button>
-                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}"><i class="fa-solid fa-trash"></i></button>
-                        </div>`;
-                    subList.appendChild(fileEl);
-                });
-                el.appendChild(subList);
-            }
-            list.appendChild(el);
+            standaloneContainer.appendChild(el);
         });
 
-        if (filteredStandalone.length > 0) {
-            const section = document.createElement('div');
-            section.innerHTML = `<div class="mgmt-section-label"><i class="fa-solid fa-file"></i> Arquivos Avulsos</div>`;
-            list.appendChild(section);
+        list.appendChild(standaloneContainer);
 
-            filteredStandalone.forEach(file => {
-                const el = document.createElement('div');
-                el.className = 'mgmt-video-group';
-                el.innerHTML = `
-                    <div class="mgmt-video-group-header">
-                        <div class="mgmt-video-info">
-                            <div>${getFileIcon(file.name)}</div>
-                            <div>
-                                <strong>${file.name}</strong>
-                                <small>${file.access_levels?.name || ''}</small>
-                            </div>
-                        </div>
-                        <div class="mgmt-actions">
-                            <button class="btn-icon" title="Editar" data-action="edit-file" data-id="${file.id}"><i class="fa-solid fa-pen"></i></button>
-                            <button class="btn-icon btn-icon-danger" title="Excluir" data-action="delete-file" data-id="${file.id}" data-name="${file.name}"><i class="fa-solid fa-trash"></i></button>
-                        </div>
-                    </div>`;
-                list.appendChild(el);
+        if (typeof Sortable !== 'undefined') {
+            let scrollFrame = null;
+            let currentY = 0;
+            document.addEventListener('mousemove', (e) => { currentY = e.clientY; });
+
+            Sortable.create(standaloneContainer, {
+                animation: 150,
+                handle: '.drag-handle',
+                draggable: '.draggable-file',
+                ghostClass: 'drag-over',
+                dragClass: 'dragging',
+                scroll: false,
+                onStart: () => {
+                    if (scrollFrame) return;
+                    const navHeight = document.querySelector('.admin-top-nav')?.offsetHeight || 60;
+                    const ZONE = 150, SPEED = 18;
+                    const step = () => {
+                        const fromTop = currentY - navHeight;
+                        const fromBottom = window.innerHeight - currentY;
+                        if (fromTop < ZONE && fromTop >= 0) window.scrollBy(0, -(SPEED * (1 - fromTop / ZONE)));
+                        else if (fromBottom < ZONE) window.scrollBy(0, SPEED * (1 - fromBottom / ZONE));
+                        scrollFrame = requestAnimationFrame(step);
+                    };
+                    scrollFrame = requestAnimationFrame(step);
+                },
+                onEnd: async () => {
+                    cancelAnimationFrame(scrollFrame);
+                    scrollFrame = null;
+                    const items = [...standaloneContainer.querySelectorAll('.draggable-file')];
+                    for (let i = 0; i < items.length; i++) {
+                        await supabase.from('files').update({ order_files: i + 1 }).eq('id', items[i].dataset.fileId);
+                    }
+                    showToast('✅ Ordem salva!');
+                }
             });
         }
+    }
 
-        list.querySelectorAll('[data-action="edit-folder"]').forEach(btn => {
-            btn.addEventListener('click', () => openFolderMgmtModal(btn.dataset.id));
-        });
-        list.querySelectorAll('[data-action="delete-folder"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                confirmDelete(`Excluir pasta "${btn.dataset.name}"? Os arquivos dentro serão desvinculados (não excluídos).`, async () => {
-                    await supabase.from('files').update({ folder_id: null }).eq('folder_id', btn.dataset.id);
-                    await supabase.from('folders').delete().eq('id', btn.dataset.id);
-                    showToast('🗑️ Pasta excluída.'); loadMaterialsMgmt();
-                });
-            });
-        });
-        list.querySelectorAll('[data-action="add-file-to-folder"]').forEach(btn => {
-            btn.addEventListener('click', () => openFileMgmtModal(null, btn.dataset.folderId));
-        });
-        list.querySelectorAll('[data-action="edit-file"]').forEach(btn => {
-            btn.addEventListener('click', () => openFileMgmtModal(parseInt(btn.dataset.id)));
-        });
-        list.querySelectorAll('[data-action="delete-file"]').forEach(btn => {
-            btn.addEventListener('click', () => {
-                confirmDelete(`Excluir arquivo "${btn.dataset.name}"?`, async () => {
-                    await supabase.from('video_files').delete().eq('file_id', btn.dataset.id);
-                    await supabase.from('files').delete().eq('id', btn.dataset.id);
-                    showToast('🗑️ Arquivo excluído.'); loadMaterialsMgmt();
-                });
-            });
+    if (typeof Sortable !== 'undefined') {
+        let scrollFrame = null;
+        let currentY = 0;
+        document.addEventListener('mousemove', (e) => { currentY = e.clientY; });
+
+        Sortable.create(foldersContainer, {
+            animation: 150,
+            handle: '.drag-handle',
+            draggable: '.draggable-folder',
+            ghostClass: 'drag-over',
+            dragClass: 'dragging',
+            scroll: false,
+            onStart: () => {
+                if (scrollFrame) return;
+                const navHeight = document.querySelector('.admin-top-nav')?.offsetHeight || 60;
+                const ZONE = 150, SPEED = 18;
+                const step = () => {
+                    const fromTop = currentY - navHeight;
+                    const fromBottom = window.innerHeight - currentY;
+                    if (fromTop < ZONE && fromTop >= 0) window.scrollBy(0, -(SPEED * (1 - fromTop / ZONE)));
+                    else if (fromBottom < ZONE) window.scrollBy(0, SPEED * (1 - fromBottom / ZONE));
+                    scrollFrame = requestAnimationFrame(step);
+                };
+                scrollFrame = requestAnimationFrame(step);
+            },
+            onEnd: async () => {
+                cancelAnimationFrame(scrollFrame);
+                scrollFrame = null;
+                const items = [...foldersContainer.querySelectorAll('.draggable-folder')];
+                for (let i = 0; i < items.length; i++) {
+                    await supabase.from('folders').update({ order_index: i + 1 }).eq('id', items[i].dataset.folderId);
+                }
+                showToast('✅ Ordem salva!');
+            }
         });
     }
+
+    list.querySelectorAll('[data-action="edit-folder"]').forEach(btn => {
+        btn.addEventListener('click', () => openFolderMgmtModal(btn.dataset.id));
+    });
+    list.querySelectorAll('[data-action="delete-folder"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            confirmDelete(`Excluir pasta "${btn.dataset.name}"? Os arquivos dentro serão desvinculados (não excluídos).`, async () => {
+                await supabase.from('files').update({ folder_id: null }).eq('folder_id', btn.dataset.id);
+                await supabase.from('folders').delete().eq('id', btn.dataset.id);
+                showToast('🗑️ Pasta excluída.'); loadMaterialsMgmt();
+            });
+        });
+    });
+    list.querySelectorAll('[data-action="add-file-to-folder"]').forEach(btn => {
+        btn.addEventListener('click', () => openFileMgmtModal(null, btn.dataset.folderId));
+    });
+    list.querySelectorAll('[data-action="edit-file"]').forEach(btn => {
+        btn.addEventListener('click', () => openFileMgmtModal(parseInt(btn.dataset.id)));
+    });
+    list.querySelectorAll('[data-action="delete-file"]').forEach(btn => {
+        btn.addEventListener('click', () => {
+            confirmDelete(`Excluir arquivo "${btn.dataset.name}"?`, async () => {
+                await supabase.from('video_files').delete().eq('file_id', btn.dataset.id);
+                await supabase.from('files').delete().eq('id', btn.dataset.id);
+                showToast('🗑️ Arquivo excluído.'); loadMaterialsMgmt();
+            });
+        });
+    });
+}
 
     document.getElementById('btn-new-folder').addEventListener('click', () => openFolderMgmtModal(null));
 
@@ -2215,10 +2350,32 @@
                 });
             });
         });
+
+        const searchInput = document.getElementById('users-mgmt-search');
+        const clearBtn = document.getElementById('clear-users-search');
+
+        if (searchInput) {
+            searchInput.value = '';
+            searchInput.oninput = () => {
+                const term = searchInput.value.toLowerCase().trim();
+                clearBtn.style.display = term ? 'flex' : 'none';
+                list.querySelectorAll('.mgmt-user-row').forEach(row => {
+                    const name = row.querySelector('strong').textContent.toLowerCase();
+                    row.style.display = name.includes(term) ? '' : 'none';
+                });
+            };
+
+            clearBtn.onclick = () => {
+                searchInput.value = '';
+                clearBtn.style.display = 'none';
+                list.querySelectorAll('.mgmt-user-row').forEach(row => row.style.display = '');
+            };
+        }
     }
 
     document.getElementById('btn-new-user').addEventListener('click', () => openUserMgmtModal(null));
 
+    
     async function openUserMgmtModal(userId) {
         _editingUserId = userId;
         document.getElementById('modal-user-mgmt-title').textContent = userId ? 'Editar Usuário' : 'Novo Usuário';

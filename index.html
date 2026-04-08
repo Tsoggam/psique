@@ -51,7 +51,7 @@
     <div id="member-screen" class="screen">
         <div class="member-background"></div>
 
-        <nav class="top-nav">
+        <nav class="top-nav" id="top-nav-default">
             <div class="nav-content">
                 <div class="nav-logo">
                     <div class="logo-circle-small">
@@ -69,26 +69,40 @@
         </nav>
 
         <div id="admin-panel" style="display: none;">
-            <div class="admin-nav">
-                <div class="admin-nav-inner">
-                    <button class="admin-tab active" data-admin-tab="dashboard">
-                        <i class="fa-solid fa-chart-line"></i>
-                        <span>Dashboard</span>
-                    </button>
-                    <button class="admin-tab" data-admin-tab="videos-mgmt">
-                        <i class="fa-solid fa-video"></i>
-                        <span>Vídeos</span>
-                    </button>
-                    <button class="admin-tab" data-admin-tab="materials-mgmt">
-                        <i class="fa-solid fa-folder"></i>
-                        <span>Materiais</span>
-                    </button>
-                    <button class="admin-tab" data-admin-tab="users-mgmt">
-                        <i class="fa-solid fa-users"></i>
-                        <span>Usuários</span>
-                    </button>
+
+            <nav class="admin-top-nav">
+                <div class="admin-top-nav-inner">
+                    <div class="nav-logo">
+                        <div class="logo-circle-small">
+                            <img class="img-members" src="assets/images/Logo_Minimalista_PSIQUE.png" alt="PSIQUE">
+                        </div>
+                    </div>
+                    <div class="admin-tabs-center">
+                        <button class="admin-tab active" data-admin-tab="dashboard">
+                            <i class="fa-solid fa-chart-line"></i>
+                            <span>Dashboard</span>
+                        </button>
+                        <button class="admin-tab" data-admin-tab="videos-mgmt">
+                            <i class="fa-solid fa-video"></i>
+                            <span>Vídeos</span>
+                        </button>
+                        <button class="admin-tab" data-admin-tab="materials-mgmt">
+                            <i class="fa-solid fa-folder"></i>
+                            <span>Materiais</span>
+                        </button>
+                        <button class="admin-tab" data-admin-tab="users-mgmt">
+                            <i class="fa-solid fa-users"></i>
+                            <span>Usuários</span>
+                        </button>
+                    </div>
+                    <div class="user-info">
+                        <span id="user-badge-admin" class="user-badge"></span>
+                        <button id="logout-btn-admin" class="btn btn-logout">
+                            <span><i class="fa-solid fa-arrow-right-from-bracket"></i></span>
+                        </button>
+                    </div>
                 </div>
-            </div>
+            </nav>
 
             <div class="admin-tab-content active" id="tab-dashboard">
                 <div class="container">
@@ -220,6 +234,15 @@
                             <i class="fa-solid fa-user-plus"></i> Novo Usuário
                         </button>
                     </div>
+                    <div class="search-container" style="margin-bottom: 16px;">
+                    <div class="search-box">
+                        <i class="fa-solid fa-magnifying-glass"></i>
+                        <input type="text" id="users-mgmt-search" placeholder="Buscar usuário..." autocomplete="off" />
+                        <button id="clear-users-search" class="clear-search-btn" style="display: none;">
+                            <i class="fa-solid fa-xmark"></i>
+                        </button>
+                        </div>
+                   </div>
                     <div id="users-mgmt-loading" class="loading" style="display:none;">
                         <div class="spinner"></div>
                         <p>Carregando...</p>
@@ -305,17 +328,16 @@
                     <div class="form-group">
                         <label class="checkbox-label">
                             <input type="checkbox" id="vg-unlocked">
-                            <span>Desbloqueado (não exige conclusão anterior)</span>
+                            <span>Desbloqueado (não requer conclusão anterior)</span>
                         </label>
                     </div>
-
-                    <div class="form-section-title">
-                        <i class="fa-solid fa-file-arrow-down"></i> Arquivos vinculados ao vídeo principal
+                    <div class="form-group">
+                        <label>Arquivos Vinculados</label>
+                        <div id="vg-linked-files-list" class="linked-files-list"></div>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-vg-file">
+                            <i class="fa-solid fa-paperclip"></i> Vincular Arquivo
+                        </button>
                     </div>
-                    <div id="vg-files-list" class="linked-files-list"></div>
-                    <button type="button" class="btn btn-ghost" id="btn-add-vg-file">
-                        <i class="fa-solid fa-plus"></i> Vincular arquivo
-                    </button>
                 </div>
                 <div class="mgmt-modal-footer">
                     <button class="btn btn-ghost" id="cancel-video-group">Cancelar</button>
@@ -336,11 +358,11 @@
                 <div class="mgmt-modal-body">
                     <div class="form-group">
                         <label>Título *</label>
-                        <input type="text" id="sv-title" placeholder="Ex: Aula 1.1 – Conceitos Básicos">
+                        <input type="text" id="sv-title" placeholder="Ex: Aula 1.1 – Conceitos básicos">
                     </div>
                     <div class="form-group">
                         <label>Descrição</label>
-                        <textarea id="sv-description" rows="3" placeholder="Descrição..."></textarea>
+                        <textarea id="sv-description" rows="3" placeholder="Descrição do sub-vídeo..."></textarea>
                     </div>
                     <div class="form-row">
                         <div class="form-group">
@@ -392,19 +414,12 @@
                         </div>
                     </div>
                     <div class="form-group">
-                        <label class="checkbox-label">
-                            <input type="checkbox" id="sv-unlocked">
-                            <span>Desbloqueado</span>
-                        </label>
+                        <label>Arquivos Vinculados</label>
+                        <div id="sv-linked-files-list" class="linked-files-list"></div>
+                        <button type="button" class="btn btn-ghost btn-sm" id="btn-add-sv-file">
+                            <i class="fa-solid fa-paperclip"></i> Vincular Arquivo
+                        </button>
                     </div>
-
-                    <div class="form-section-title">
-                        <i class="fa-solid fa-file-arrow-down"></i> Arquivos vinculados
-                    </div>
-                    <div id="sv-files-list" class="linked-files-list"></div>
-                    <button type="button" class="btn btn-ghost" id="btn-add-sv-file">
-                        <i class="fa-solid fa-plus"></i> Vincular arquivo
-                    </button>
                 </div>
                 <div class="mgmt-modal-footer">
                     <button class="btn btn-ghost" id="cancel-sub-video">Cancelar</button>
@@ -425,15 +440,16 @@
                 <div class="mgmt-modal-body">
                     <div class="form-group">
                         <label>Nome *</label>
-                        <input type="text" id="fm-name" placeholder="Nome da pasta">
+                        <input type="text" id="folder-mgmt-name" placeholder="Nome da pasta">
                     </div>
                     <div class="form-group">
                         <label>Descrição</label>
-                        <textarea id="fm-description" rows="3" placeholder="Descrição..."></textarea>
+                        <textarea id="folder-mgmt-description" rows="3"
+                            placeholder="Descrição da pasta..."></textarea>
                     </div>
                     <div class="form-group">
                         <label>Nível de Acesso *</label>
-                        <select id="fm-access-level">
+                        <select id="folder-mgmt-access-level">
                             <option value="1">Psicólogos</option>
                             <option value="2">Administrativo</option>
                         </select>
@@ -462,7 +478,8 @@
                     </div>
                     <div class="form-group">
                         <label>Descrição</label>
-                        <textarea id="file-mgmt-description" rows="2" placeholder="Descrição..."></textarea>
+                        <textarea id="file-mgmt-description" rows="3"
+                            placeholder="Descrição do arquivo..."></textarea>
                     </div>
                     <div class="form-group">
                         <label>URL do Arquivo *</label>
