@@ -521,6 +521,11 @@ body {
     padding: clamp(20px, 3vh, 100px) var(--spacing-md) var(--spacing-xl);
 }
 
+#member-screen.active {
+    align-items: flex-start;
+    justify-content: flex-start;
+}
+
 .top-nav {
     position: fixed;
     top: 0;

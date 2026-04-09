@@ -1713,6 +1713,22 @@ window.addEventListener('scroll', () => {
         sel?.addEventListener('change', () => renderThumbnailGrid(prefix, sel.value));
     }
 
+    // Mostra/esconde o bucket capa-administrativo conforme o access_level selecionado
+    function syncAdminBucketOption(accessLevelId) {
+        const isAdmin = parseInt(accessLevelId) === 2;
+        ['vg', 'sv'].forEach(prefix => {
+            const sel = document.getElementById(`${prefix}-bucket-select`);
+            if (!sel) return;
+            const adminOpt = sel.querySelector('.bucket-admin-only');
+            if (!adminOpt) return;
+            adminOpt.style.display = isAdmin ? '' : 'none';
+            // Se estava selecionado e deixou de ser admin, volta pro padrão
+            if (!isAdmin && sel.value === 'capa-administrativo') {
+                sel.value = 'thumbnail';
+            }
+        });
+    }
+
     async function getVideoLinkedFiles(videoId) {
         const { data } = await supabase
             .from('video_files')
@@ -1724,6 +1740,10 @@ window.addEventListener('scroll', () => {
 
     function renderLinkedFilesList(containerId, linkedFiles, btnAddId) {
         const container = document.getElementById(containerId);
+        if (!container) {
+            console.warn(`renderLinkedFilesList: elemento #${containerId} não encontrado`);
+            return;
+        }
         container.innerHTML = '';
         linkedFiles.forEach((lf, i) => {
             const row = document.createElement('div');
@@ -1770,14 +1790,18 @@ window.addEventListener('scroll', () => {
 
         document.getElementById('vg-unlocked').checked = false;
         document.getElementById('vg-access-level').value = '1';
-        renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+        syncAdminBucketOption(1);
+        // Listener para mudar bucket disponível quando access level mudar
+        const vgAccessSel = document.getElementById('vg-access-level');
+        vgAccessSel.onchange = () => syncAdminBucketOption(vgAccessSel.value);
+        renderLinkedFilesList('vg-linked-files-list', _vgLinkedFiles, 'btn-add-vg-file');
         setupBucketSelectListener('vg');
         openMgmtModal('modal-video-group');
     });
 
     document.getElementById('btn-add-vg-file').addEventListener('click', () => {
         _vgLinkedFiles.push({ file_id: null, display_order: _vgLinkedFiles.length + 1 });
-        renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+        renderLinkedFilesList('vg-linked-files-list', _vgLinkedFiles, 'btn-add-vg-file');
     });
 
     document.getElementById('btn-pick-vg-thumbnail')?.addEventListener('click', () => loadThumbnailPickerInline('vg'));
@@ -1814,13 +1838,24 @@ window.addEventListener('scroll', () => {
         document.getElementById(`${prefix}-unlocked`).checked = !!video.unlocked;
         if (isGroup) document.getElementById('vg-access-level').value = video.access_level_id || '1';
 
+        // Sincroniza visibilidade do bucket admin e registra listener
+        if (isGroup) {
+            syncAdminBucketOption(video.access_level_id || 1);
+            const vgAccessSel = document.getElementById('vg-access-level');
+            vgAccessSel.onchange = () => syncAdminBucketOption(vgAccessSel.value);
+        } else {
+            // sub-vídeo herda access_level do pai
+            const { data: parent } = await supabase.from('videos').select('access_level_id').eq('id', parseInt(parentId || video.parent_video_id)).single();
+            syncAdminBucketOption(parent?.access_level_id || 1);
+        }
+
         const linked = await getVideoLinkedFiles(videoId);
         if (isGroup) {
             _vgLinkedFiles = linked;
-            renderLinkedFilesList('vg-files-list', _vgLinkedFiles, 'btn-add-vg-file');
+            renderLinkedFilesList('vg-linked-files-list', _vgLinkedFiles, 'btn-add-vg-file');
         } else {
             _svLinkedFiles = linked;
-            renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+            renderLinkedFilesList('sv-linked-files-list', _svLinkedFiles, 'btn-add-sv-file');
         }
 
         setupBucketSelectListener(prefix);
@@ -1925,14 +1960,21 @@ window.addEventListener('scroll', () => {
                 document.getElementById('sv-unlocked').checked = !!v.unlocked;
             }
         }
-        renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+        renderLinkedFilesList('sv-linked-files-list', _svLinkedFiles, 'btn-add-sv-file');
         setupBucketSelectListener('sv');
+
+        // Sub-vídeo herda access_level do pai — sincroniza bucket admin
+        if (parentId) {
+            const { data: parent } = await supabase.from('videos').select('access_level_id').eq('id', parseInt(parentId)).single();
+            syncAdminBucketOption(parent?.access_level_id || 1);
+        }
+
         openMgmtModal('modal-sub-video');
     }
 
     document.getElementById('btn-add-sv-file').addEventListener('click', () => {
         _svLinkedFiles.push({ file_id: null, display_order: _svLinkedFiles.length + 1 });
-        renderLinkedFilesList('sv-files-list', _svLinkedFiles, 'btn-add-sv-file');
+        renderLinkedFilesList('sv-linked-files-list', _svLinkedFiles, 'btn-add-sv-file');
     });
 
     document.getElementById('btn-pick-sv-thumbnail')?.addEventListener('click', () => loadThumbnailPickerInline('sv'));
