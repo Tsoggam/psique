@@ -1943,7 +1943,8 @@ window.addEventListener('scroll', () => {
         const svSection = document.getElementById('sv-thumbnail-section');
         if (svSection) svSection.style.display = 'none';
 
-        document.getElementById('sv-unlocked').checked = false;
+        const svUnlocked = document.getElementById('sv-unlocked');
+        if (svUnlocked) svUnlocked.checked = false;
 
         if (videoId) {
             const { data: v } = await supabase.from('videos').select('*').eq('id', videoId).single();
@@ -1957,7 +1958,7 @@ window.addEventListener('scroll', () => {
                 if (svPlaceholder) svPlaceholder.style.display = svThumbUrl ? 'none' : 'inline';
                 document.getElementById('sv-section').value = v.section_number || '';
                 document.getElementById('sv-order').value = v.order_index ?? '';
-                document.getElementById('sv-unlocked').checked = !!v.unlocked;
+                if (svUnlocked) svUnlocked.checked = !!v.unlocked;
             }
         }
         renderLinkedFilesList('sv-linked-files-list', _svLinkedFiles, 'btn-add-sv-file');
