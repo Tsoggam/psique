@@ -1877,7 +1877,7 @@ window.addEventListener('scroll', () => {
             thumbnail_url: thumbnailUrl,
             section_number: document.getElementById(`${prefix}-section`).value.trim() || null,
             order_index: parseInt(document.getElementById(`${prefix}-order`).value) || 0,
-            unlocked: document.getElementById(`${prefix}-unlocked`).checked,
+            unlocked: document.getElementById(`${prefix}-unlocked`)?.checked ?? false,
         };
 
         if (isGroup) {
